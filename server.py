@@ -1,6 +1,7 @@
 import sys, subprocess
 from hashlib import sha256
 import os, platform, time
+import getpass
 
 
 def cli_clear():
@@ -24,7 +25,7 @@ def clean(server):
     return 1
 
 def create_passwd():
-    paswd = input("Create password for server access: ")
+    paswd = getpass.getpass("Create password for server access: ")
     return sha256(paswd.encode('utf-8')).hexdigest()
 
 def info(line):
