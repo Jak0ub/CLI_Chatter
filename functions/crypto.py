@@ -1,5 +1,6 @@
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
+from hashlib import sha256
 
 
 def generate_keys():
@@ -19,3 +20,6 @@ def encrypt(public_key, msg=str):
 def decrypt(private_key, msg):
     decrypted = private_key.decrypt(msg,padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
     return decrypted
+
+def hash_text(text=str):
+    return sha256(text.encode("utf-8")).hexdigest()

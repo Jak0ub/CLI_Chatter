@@ -1,6 +1,10 @@
 import sys, subprocess
 import os, platform
-import getpass
+import getpass, time
+
+
+def wait(sec):
+    time.sleep(sec)
 
 def cli_clear():
     os.system("clear")
@@ -13,6 +17,7 @@ def check():
 def init():
     os.system("mkdir hosting && mkdir hosting/viewer")
     os.chdir("hosting/viewer")
+    with open("auth.txt", "w") as f: pass
     server = subprocess.Popen(["python3", "-m", "http.server"], stderr=open("../log.txt", "w")) #Start server and redirect stderr stream to log file
     return server
 
@@ -22,8 +27,8 @@ def clean(server):
     os.system("rm -rf hosting") #No logs!
     return 1
 
-def create_passwd():
-    paswd = getpass.getpass("Create password for server access: ")
+def get_safe_input(text):
+    paswd = getpass.getpass(text)
     return paswd
 
 def info(line):
@@ -33,3 +38,11 @@ def info(line):
     page = line.split(" /")[1].split(" HTTP")[0]
     if len(page.split("?")) != 1: params = page.split("?")[1]
     return ip, params
+
+
+def save_authorized_ip(ip):
+    with open("auth.txt", "r") as f:
+        l = f.readlines()
+    l.append(f"{ip}\n")
+    with open("auth.txt", "w") as f:
+        f.writelines(l)
