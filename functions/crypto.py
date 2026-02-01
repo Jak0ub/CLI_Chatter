@@ -1,6 +1,23 @@
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 from hashlib import sha256
+import base64, ast
+
+def str_to_bytes(text):
+    return ast.literal_eval(text)
+
+def base64_encode(text):
+    bytes_text =  text.encode("ascii")
+    b64_bytes = base64.b64encode(bytes_text)
+    b64_str = b64_bytes.decode("ascii")
+    return b64_str
+
+
+def base64_decode(text):
+    b64_text =  text.encode("ascii")
+    b64_bytes = base64.b64decode(b64_text)
+    text = b64_bytes.decode("ascii")
+    return text
 
 
 def generate_keys():
@@ -23,3 +40,6 @@ def decrypt(private_key, msg):
 
 def hash_text(text=str):
     return sha256(text.encode("utf-8")).hexdigest()
+
+def load_pub_key(pub):
+    return serialization.load_pem_public_key(pub)

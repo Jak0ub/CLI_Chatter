@@ -46,3 +46,11 @@ def save_authorized_ip(ip):
     l.append(f"{ip}\n")
     with open("auth.txt", "w") as f:
         f.writelines(l)
+
+
+def create_rooms(num_of_rooms):
+    rooms = []
+    for i in range(num_of_rooms):
+        rooms.append(0)
+        with open(f"{i+1}.txt", "w") as f:pass
+    return rooms
