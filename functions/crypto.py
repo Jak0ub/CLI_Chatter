@@ -29,6 +29,10 @@ def save_pub_key(public_key):
     with open("key.pub", "wb") as f:
         f.write(public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo))
 
+def key_to_bytes(public_key):
+    return public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
+
+
 def encrypt(public_key, msg=str):
     msg = msg.encode("utf-8")
     encrypted = public_key.encrypt(msg, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
