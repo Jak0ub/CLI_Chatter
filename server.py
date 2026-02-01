@@ -1,49 +1,16 @@
-import sys, subprocess
 from hashlib import sha256
-import os, platform, time
-import getpass
-
-
-def cli_clear():
-    os.system("clear")
-
-def check():
-    if platform.system() == "Windows":
-        print("Only for Unix")
-        sys.exit()
-def init():
-    os.system("mkdir hosting && mkdir hosting/viewer")
-    os.chdir("hosting/viewer")
-    server = subprocess.Popen(["python3", "-m", "http.server"], stderr=open("../log.txt", "w")) #Start server and redirect stderr stream to log file
-
-    return server
-
-def clean(server):
-    server.kill()
-    os.chdir("..")
-    os.system("rm -rf hosting") #No logs!
-    return 1
-
-def create_passwd():
-    paswd = getpass.getpass("Create password for server access: ")
-    return sha256(paswd.encode('utf-8')).hexdigest()
-
-def info(line):
-    params = ""
-    ip = line.split(" ")[0]
-    if "200" not in line.split(" "): return ip, "" 
-    page = line.split(" /")[1].split(" HTTP")[0]
-    if len(page.split("?")) != 1: params = page.split("?")[1]
-    return ip, params
+import time
+from functions import crypto, others
 
 
 def main():
-    check()
-    server = init()
+    others.check()
+    server = others.init()
     time.sleep(1) #Ensure clear terminal
-    cli_clear()
-    access_code = create_passwd()
-    os.chdir("..")
+    others.cli_clear()
+    private_key, public_key = crypto.generate_keys()
+    crypto.save_pub_key(public_key)
+    access_code = others.create_passwd()
 
     ddos_protection = 30 #If one IP exceed this number of packets. The server shuts down this IP
     resolved = 0 #Number of requests resolved already
@@ -52,10 +19,10 @@ def main():
     banned_ip = []
     while True:
         time.sleep(0.1)
-        with open("log.txt", "r") as f: lines = f.readlines()
+        with open("../log.txt", "r") as f: lines = f.readlines()
         lines = lines[(resolved):]#exclude the lines already resolved
         for line in lines:
-            ip, params = info(line)
+            ip, params = others.info(line)
             if ip in banned_ip: continue
             #Packet counter. DDOS PROTECTION
             if ip not in access_granted:
@@ -67,8 +34,11 @@ def main():
                         break
                     elif adr[0] != ip and Addresses.index(adr) == len(Addresses): Addresses.append([ip, 0]) 
             #Access solution
+            #If the access_code+OriginIP hashed match the parameter given. The IP has access granted. Just prevention system
+            access_code_for_this_ip = f"{access_code}{ip}"
+            hashed_access_code_for_this_ip = sha256(access_code_for_this_ip.encode('utf-8')).hexdigest()
             if params != "":
-                if params.split("=")[0].lower() == "code" and params.split("=")[1] == access_code: access_granted.append(ip)
+                if params.split("=")[0].lower() == "code" and params.split("=")[1] == hashed_access_code_for_this_ip: access_granted.append(ip)
 
         resolved += len(lines)
 
@@ -77,7 +47,7 @@ def main():
 
         if len(banned_ip) != 0 or len(access_granted) != 0: break #For testing ONLY
 
-    if clean(server) == 1:
+    if others.clean(server) == 1:
         print("server stopped successfully")
     else:
         print("error occured")
