@@ -1,15 +1,27 @@
 from functions import crypto, others
 
+def decode(params, query, key):
+    answer = crypto.base64_decode(params.split(f"{query}=")[1].split(" ")[0]) #Get request from authorized client
+    answer = crypto.str_to_bytes(answer)#Str to bytes
+    return crypto.decrypt(key,answer) #Decrypt text from client using private key
+
+def retrieve_key(params):
+    key = params.split("key=")[1].split(" ")[0]
+    key = crypto.base64_decode(key)
+    key = crypto.str_to_bytes(key)
+    return crypto.load_pub_key(key)
+
 def main():
     #others.check()
     server = others.init()
     others.wait(1) #Ensure clear terminal
-    others.cli_clear()
+    clear_cmd = others.os_def()
+    others.clear(clear_cmd)
     private_key, public_key = crypto.generate_keys()
     crypto.save_pub_key(public_key)
     access_code = others.get_safe_input("Create password for server access: ")
     rooms = others.create_rooms(int(input("Enter how many chat rooms you'd like: ")))
-    others.cli_clear()
+    others.clear(clear_cmd)
     print("Server is running")
 
 
@@ -26,8 +38,11 @@ def main():
     while True:
         others.wait(0.1)
         with open("../log.txt", "r") as f: lines = f.readlines()
+        if resolved > 100: 
+            with open("../log.txt", "w") as f: f.write(""); resolved = 0#Clear logs
         lines = lines[(resolved):]#exclude the lines already resolved
-        for line in lines:
+
+        for line in lines: #Resolving requests
             ip, params = others.info(line)
             if ip in banned_ip: continue
             #Packet counter. DDOS PROTECTION
@@ -53,9 +68,7 @@ def main():
             else:
                 if params != "":
                     if params.split("=")[0].lower() == "room":
-                        room_num = crypto.base64_decode(params.split("room=")[1].split(" ")[0]) #Get request from authorized client
-                        room_num = crypto.str_to_bytes(room_num)#Str to bytes
-                        room_num = crypto.decrypt(private_key,room_num) #Decrypt text from client using private key
+                        room_num =  decode(params, "room", private_key)
                         #Convert to int to ensure the decryption was errorless
                         try: room_num = int(room_num)
                         except ValueError: pass
@@ -65,27 +78,36 @@ def main():
                                 if rooms[room_num-1] == 0 and ip_to_room[ip] != room_num: #If the room is not full and current ip is not in this room
                                     if ip_to_room[ip] != 0:
                                         with open(f"{ip_to_room[ip]}.txt", "w") as f: f.write(f"{rooms[room_num-1]}\n")#Leave the previous room
+                                        rooms[ip_to_room[ip]-1] -= 1
+                                    rooms[room_num-1] += 1
                                     ip_to_room[ip] = room_num
                                     #Join new room
-                                    with open(f"{room_num}.txt", "w") as f: f.write(f"{rooms[room_num-1]+1}\n") #Write status to the file
+                                    with open(f"{room_num}.txt", "w") as f: f.write(f"{rooms[room_num-1]}\n") #Write status to the file
                                 elif rooms[room_num-1] == 1 and ip_to_room[ip] != room_num: #Ask the other side for approval to join
-                                    if ip_to_key[ip] == True: #Key obtained. E2EE available
+                                    other_side = next(k for k, v in ip_to_room.items() if v == room_num)
+                                    if ip_to_key[other_side] == True: #Key obtained. E2EE available
                                         for value in keys: 
-                                            if value[0] == ip: pub_key_client = value[1]
-                                        with open(f"{ip_to_room[ip]}.txt", "w") as f: f.writelines(["1\n", f"{crypto.encrypt(pub_key_client, f"{ip}")}"])
-
+                                            if value[0] == other_side: pub_key_client = value[1]
+                                        with open(f"{room_num}.txt", "w") as f: f.writelines(["1\n", f"{crypto.encrypt(pub_key_client, f"{ip}")}"])
+  
                     elif params.split("=")[0].lower() == "key":
                         #Decode the key and make it usable
-                        key = params.split("key=")[1].split(" ")[0]
-                        key = crypto.base64_decode(key)
-                        key = crypto.str_to_bytes(key)
-                        key = crypto.load_pub_key(key)
+                        key = retrieve_key(params)
                         #If key for this ip was not saved, save it
-                        if keys == []: keys.append([ip, key]); ip_to_key[ip] = {ip: True}
+                        if keys == []: keys.append([ip, key]); ip_to_key[ip] = True
                         for values in keys:
                             if values[0] == ip: break
-                            if values[0] != ip and keys.index(values) == len(keys)-1: keys.append([ip, key]); ip_to_key[ip] = {ip: True}
-            
+                            if values[0] != ip and keys.index(values) == len(keys)-1: keys.append([ip, key]); ip_to_key[ip] = True
+
+                    elif params.split("=")[0].lower() == "respond":
+                        if rooms[ip_to_room[ip]-1] == 1:
+                            msg = decode(params, "respond", private_key)
+                            for value in keys: 
+                                if value[0] == msg.decode("utf-8"): pub_key_client = value[1]
+                            with open(f"{ip_to_room[ip]}.txt", "w") as f: f.writelines(["2\n", f"{crypto.encrypt(pub_key_client, f"{msg.decode("utf-8")}")}"])
+
+                        
+
         resolved += len(lines)
 
     if others.clean(server) == 1:
@@ -95,4 +117,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

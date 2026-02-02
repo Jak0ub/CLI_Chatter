@@ -2,6 +2,9 @@ import sys, subprocess
 import os, platform
 import getpass, time
 
+def quit():
+    sys.exit()
+
 def os_def():
     platform_system = platform.system()
     if platform_system == "Windows":
@@ -15,8 +18,6 @@ def clear(cmd):
 def wait(sec):
     time.sleep(sec)
 
-def cli_clear():
-    os.system("clear")
 
 def check():
     if platform.system() == "Windows":

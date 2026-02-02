@@ -18,7 +18,7 @@ def check_access(server):
 
 def main():
     clear_cmd = others.os_def()
-
+    msg_mode = 0
     server = input("Enter the server ip with port(default port 80): ")
     access = check_access(server) #If access granted, than skip following if statement
 
@@ -56,15 +56,15 @@ def main():
 
         #Entering room     
         room = input("Enter chat room number: ")
-        before = rq.get(f"http://{server}/{room}.txt")
         room_enc = crypto.encrypt(server_key, room)
+        before = rq.get(f"http://{server}/{room}.txt") 
         rq.get(f"http://{server}/?key={crypto.base64_encode(str(crypto.key_to_bytes(public_key)))}") #Send the pub key
         others.wait(1)
-        rq.get(f"http://{server}/?room={crypto.base64_encode(str(room_enc))}")
+        rq.get(f"http://{server}/?room={crypto.base64_encode(str(room_enc))}") #Send room info
         others.wait(1)
         after = rq.get(f"http://{server}/{room}.txt") 
-        if (before.text).splitlines()[0] != (after.text).splitlines()[0]: #If the room details changed, than you're wellcome
-            
+        if (before.text).splitlines()[0] == "0" or len((after.text).splitlines()) == 1: #If the room is empty
+            msg_mode = 1 
             others.clear(clear_cmd)
             print(f"Welcome to chat room {room}\nwaiting for reuqests")
             only_one_in_room = True
@@ -72,15 +72,35 @@ def main():
                 others.wait(10)
                 r = rq.get(f"http://{server}/{room}.txt")
                 if len((r.text).splitlines()) != 1:
-                    msg = (r.text).splitlines[1]
-                    msg = crypto.base64_decode(msg)
+                    msg = (r.text).splitlines()[msg_mode]
                     msg = crypto.decrypt(private_key, crypto.str_to_bytes(msg))
-                    request = input(f"{msg} is trying to join. Let them in? y/n: ")
+                    request = input(f"{msg.decode("utf-8")} is trying to join. Let them in? y/n: ")
                     if request.lower() == "y": only_one_in_room = False
-             
+            rq.get(f"http://{server}/?respond={crypto.base64_encode(str(crypto.encrypt(server_key, msg.decode("utf-8"))))}") 
+            input()
 
+        elif (before.text).splitlines()[0] == "1":
+            before = rq.get(f"http://{server}/{room}.txt") 
+            msg_mode = 2
+            waiting = True
+            others.clear(clear_cmd)
+            print("waiting for response")
+            while waiting:
+                others.wait(10)
+                r = rq.get(f"http://{server}/{room}.txt")
+                if (r.text).splitlines()[1] != (before.text).splitlines()[1]:
+                    try:
+                        msg = (r.text).splitlines()[1]
+                        msg = crypto.decrypt(private_key, crypto.str_to_bytes(msg))
+                    except:
+                        print("Rejected")
+                        others.quit()
+                    if msg.decode("utf-8") == get_public_ip():
+                        print(f"Welcome to chat room {room}")
+                        waiting = False
         else:
-            print("waiting for response...")
+            print("room is full")
+            others.quit()
 
 
 
