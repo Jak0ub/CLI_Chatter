@@ -3,6 +3,8 @@
 * E2EE CLI chat app created using python.
 * Code is separated into multiple files for better modularity
 * Program allows (default) 30 requests from each IP before shuting the IP down -> (default) 10 password attempts for each IP
+* After sending correct access code. IP has unlimited packet count to be processed so `choose carefully who you give your password to`
+* After 100 packets. The server clears all logs. When server is shutting down, all logs are deleted.
 * MitM attack is not problem. Each IP has unique code for authorization process generated based on your server-side code
 * Server does not store any logs
 
