@@ -68,7 +68,8 @@ def main():
             else:
                 if params != "":
                     if params.split("=")[0].lower() == "room":
-                        room_num =  decode(params, "room", private_key)
+                        try: room_num =  decode(params, "room", private_key)
+                        except: continue 
                         #Convert to int to ensure the decryption was errorless
                         try: room_num = int(room_num)
                         except ValueError: pass
@@ -92,7 +93,8 @@ def main():
   
                     elif params.split("=")[0].lower() == "key":
                         #Decode the key and make it usable
-                        key = retrieve_key(params)
+                        try: key = retrieve_key(params)
+                        except: continue
                         #If key for this ip was not saved, save it
                         if keys == []: keys.append([ip, key]); ip_to_key[ip] = True
                         for values in keys:
@@ -100,13 +102,14 @@ def main():
                             if values[0] != ip and keys.index(values) == len(keys)-1: keys.append([ip, key]); ip_to_key[ip] = True
 
                     elif params.split("=")[0].lower() == "respond":
+                        #Get respond msg from client 1 and acknowledge the other side with specific IP specified by responder side
+                        if ip_to_room[ip] == 0: continue #Prevent errors if the respond msg was sent by unauthorized person
                         if rooms[ip_to_room[ip]-1] == 1:
-                            msg = decode(params, "respond", private_key)
+                            try: msg = decode(params, "respond", private_key)
+                            except: continue
                             for value in keys: 
                                 if value[0] == msg.decode("utf-8"): pub_key_client = value[1]
                             with open(f"{ip_to_room[ip]}.txt", "w") as f: f.writelines(["2\n", f"{crypto.encrypt(pub_key_client, f"{msg.decode("utf-8")}")}"])
-
-                        
 
         resolved += len(lines)
 

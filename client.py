@@ -6,7 +6,7 @@ from urllib.request import urlopen
 def get_public_ip():
     data = str(urlopen('http://checkip.dyndns.com/').read())
     ip = r.compile(r'Address: (\d+\.\d+\.\d+\.\d+)').search(data).group(1)
-    return "127.0.0.1"
+    return "127.0.0.1" #Just for testing
     #return ip
 
 def check_access(server):
@@ -47,23 +47,23 @@ def main():
         rooms.pop(-1)#Delete the 404 page
         count_of_rooms = 0
 
+        #Show all rooms
         for room in rooms:
             count_of_rooms += 1
-            if room == "":
-                print(f"{count_of_rooms}. room -> 0/2 online")
-            else:
-                print(f"{count_of_rooms}. room -> {room.splitlines()[0]}/2 online")
+            print(f"{count_of_rooms}. room -> {room.splitlines()[0]}/2 online")
 
         #Entering room     
         room = input("Enter chat room number: ")
         room_enc = crypto.encrypt(server_key, room)
-        before = rq.get(f"http://{server}/{room}.txt") 
+        before = rq.get(f"http://{server}/{room}.txt") #Get room details
         rq.get(f"http://{server}/?key={crypto.base64_encode(str(crypto.key_to_bytes(public_key)))}") #Send the pub key
         others.wait(1)
         rq.get(f"http://{server}/?room={crypto.base64_encode(str(room_enc))}") #Send room info
         others.wait(1)
-        after = rq.get(f"http://{server}/{room}.txt") 
-        if (before.text).splitlines()[0] == "0" or len((after.text).splitlines()) == 1: #If the room is empty
+        after = rq.get(f"http://{server}/{room}.txt") #Get room details
+
+        #Empty room
+        if (before.text).splitlines()[0] == "0" or len((after.text).splitlines()) == 1:
             msg_mode = 1 
             others.clear(clear_cmd)
             print(f"Welcome to chat room {room}\nwaiting for reuqests")
@@ -77,8 +77,10 @@ def main():
                     request = input(f"{msg.decode("utf-8")} is trying to join. Let them in? y/n: ")
                     if request.lower() == "y": only_one_in_room = False
             rq.get(f"http://{server}/?respond={crypto.base64_encode(str(crypto.encrypt(server_key, msg.decode("utf-8"))))}") 
-            input()
-
+            others.wait(10)
+            others.clear(clear_cmd)
+            print(f"{msg.decode("utf-8")} joined\n")
+        #Someone is already in the room. Ask them for approval
         elif (before.text).splitlines()[0] == "1":
             before = rq.get(f"http://{server}/{room}.txt") 
             msg_mode = 2
@@ -98,12 +100,14 @@ def main():
                     if msg.decode("utf-8") == get_public_ip():
                         print(f"Welcome to chat room {room}")
                         waiting = False
+        #Room is full
         else:
             print("room is full")
             others.quit()
-
-
-
+        #Joined chat room, the communication begins
+        chatting = True
+        while chatting:
+            pass #Todo
 
 if __name__ == "__main__":
     main()
