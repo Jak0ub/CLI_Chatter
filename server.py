@@ -12,7 +12,7 @@ def retrieve_key(params):
     return crypto.load_pub_key(key)
 
 def main():
-    #others.check()
+    others.check()
     server = others.init()
     others.wait(1) #Ensure clear terminal
     clear_cmd = others.os_def()
@@ -30,6 +30,7 @@ def main():
     access_granted = []
     Addresses = []
     banned_ip = [] 
+    communicating_ip = []
     ip_to_room = {} #Which ip is in which room
     ip_to_key = {} # {127.0.0.1: True} means we have key for 127.0.0.1 ip
     keys = [] #Public keys of clients
@@ -78,8 +79,8 @@ def main():
                             if room_num <= len(rooms) and room_num > 0:
                                 if rooms[room_num-1] == 0 and ip_to_room[ip] != room_num: #If the room is not full and current ip is not in this room
                                     if ip_to_room[ip] != 0:
-                                        with open(f"{ip_to_room[ip]}.txt", "w") as f: f.write(f"{rooms[room_num-1]}\n")#Leave the previous room
                                         rooms[ip_to_room[ip]-1] -= 1
+                                        with open(f"{ip_to_room[ip]}.txt", "w") as f: f.write(f"{rooms[ip_to_room[ip]-1]}\n")#Leave the previous room
                                     rooms[room_num-1] += 1
                                     ip_to_room[ip] = room_num
                                     #Join new room
@@ -105,11 +106,44 @@ def main():
                         #Get respond msg from client 1 and acknowledge the other side with specific IP specified by responder side
                         if ip_to_room[ip] == 0: continue #Prevent errors if the respond msg was sent by unauthorized person
                         if rooms[ip_to_room[ip]-1] == 1:
-                            try: msg = decode(params, "respond", private_key)
+                            try: 
+                                msg = decode(params, "respond", private_key)
+                                ip_to_room[msg.decode("utf-8")] = ip_to_room[ip] #Convert reciever to specific room
                             except: continue
                             for value in keys: 
-                                if value[0] == msg.decode("utf-8"): pub_key_client = value[1]
-                            with open(f"{ip_to_room[ip]}.txt", "w") as f: f.writelines(["2\n", f"{crypto.encrypt(pub_key_client, f"{msg.decode("utf-8")}")}"])
+                                if value[0] == msg.decode("utf-8"): pub_key_client = value[1]  
+                            with open(f"{ip_to_room[ip]}.txt", "w") as f: f.writelines(["1\n", f"{crypto.encrypt(pub_key_client, f"{msg.decode("utf-8")}")}"])
+                    
+                    elif params.split("=")[0].lower() == "start":
+                        try:
+                            for val in ip_to_room:
+                                if ip_to_room[val] == ip_to_room[ip] and rooms[ip_to_room[ip]-1] == 1 and val != ip: #Room was not yet updated and this is valid response to start chatting
+                                    rooms[ip_to_room[ip]-1] += 1
+                                    with open(f"{ip_to_room[ip]}.txt", "w") as f: f.writelines(["2\n", "\n", "\n"]) #Prepare file for two way communication
+                                    #Append both IP for future communication
+                                    communicating_ip.append(ip)  #The requester IP is 1st
+                                    communicating_ip.append(val) #Origin IP is 2nd
+                        except: continue #Not valid request? Skip this packet
+
+                    elif params.split("=")[0].lower() == "msg":
+                        if ip in communicating_ip:
+                            try:
+                                msg = decode(params, "msg", private_key)
+                                with open(f"{ip_to_room[ip]}.txt", "r") as f: l = f.readlines() #Load room data to change only specific line
+                                for val in ip_to_room:
+                                    if ip_to_room[val] == ip_to_room[ip] and val != ip: #In same chat room but not the same IP
+                                        other_side = val 
+                                for key in keys:
+                                    if key[0] == other_side: other_side_key = key[1] #Get pub key of recieving side
+                                l[(communicating_ip.index(ip)%2)+1] = f"{crypto.encrypt(other_side_key, msg.decode("utf-8"))}\n" #Encrypt
+                                with open(f"{ip_to_room[ip]}.txt", "w")as f: f.writelines(l) #Save changes
+                            except: continue #Not valid request? Skip
+                            
+                    
+
+
+                    
+
 
         resolved += len(lines)
 

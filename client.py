@@ -2,12 +2,13 @@ import requests as rq
 from functions import crypto, others
 import re as r #RegEx lib
 from urllib.request import urlopen
+import threading
 
 def get_public_ip():
     data = str(urlopen('http://checkip.dyndns.com/').read())
     ip = r.compile(r'Address: (\d+\.\d+\.\d+\.\d+)').search(data).group(1)
-    return "127.0.0.1" #Just for testing
-    #return ip
+    #return "127.0.0.1" #Just for testing
+    return ip
 
 def check_access(server):
     #Check if access was granted
@@ -15,6 +16,29 @@ def check_access(server):
     for line in (r.text).splitlines():
         if line.strip() == crypto.hash_text(get_public_ip()): return True
     return False
+
+def animate_text(msg, clear_cmd, state):
+    others.clear(clear_cmd)
+    print(f"{msg}{state*"."}")
+    if state==3: state=0
+    else: state += 1
+    return state
+
+def send_msg(server,msg,server_key):
+    rq.get(f"http://{server}/?msg={crypto.base64_encode(str(crypto.encrypt(server_key, msg)))}") #Send message
+
+def load_new_msg(server, room, msg_mode, other_side_ip, private_key):
+    last_msg = ""
+    while True:
+        others.wait(3)
+        r = rq.get(f"http://{server}/{room}.txt")
+        if (r.text).splitlines()[msg_mode] != last_msg: #New msg at my line
+            try:
+                msg = (r.text).splitlines()[msg_mode]
+                last_msg = msg
+                msg = crypto.decrypt(private_key, crypto.str_to_bytes(msg))
+                print(f"{other_side_ip}> {msg.decode("utf-8")}")
+            except: print(f" >>Error decrypting msg from {other_side_ip}")
 
 def main():
     clear_cmd = others.os_def()
@@ -65,30 +89,37 @@ def main():
         #Empty room
         if (before.text).splitlines()[0] == "0" or len((after.text).splitlines()) == 1:
             msg_mode = 1 
-            others.clear(clear_cmd)
-            print(f"Welcome to chat room {room}\nwaiting for reuqests")
             only_one_in_room = True
+            state = 0
             while only_one_in_room:
                 others.wait(10)
+                state = animate_text("Waiting for requests", clear_cmd, state)
                 r = rq.get(f"http://{server}/{room}.txt")
                 if len((r.text).splitlines()) != 1:
                     msg = (r.text).splitlines()[msg_mode]
                     msg = crypto.decrypt(private_key, crypto.str_to_bytes(msg))
-                    request = input(f"{msg.decode("utf-8")} is trying to join. Let them in? y/n: ")
+                    other_side_ip = msg.decode("utf-8")
+                    request = input(f"{other_side_ip} is trying to join. Let them in? y/n: ")
                     if request.lower() == "y": only_one_in_room = False
-            rq.get(f"http://{server}/?respond={crypto.base64_encode(str(crypto.encrypt(server_key, msg.decode("utf-8"))))}") 
-            others.wait(10)
-            others.clear(clear_cmd)
-            print(f"{msg.decode("utf-8")} joined\n")
+            waiting = True
+            rq.get(f"http://{server}/?respond={crypto.base64_encode(str(crypto.encrypt(server_key, other_side_ip)))}")  #Accept the ip
+            while waiting:
+                others.wait(10)
+                state = animate_text("Waiting for response", clear_cmd, state)
+                r = rq.get(f"http://{server}/{room}.txt")
+                if (r.text).splitlines()[0] == "2":
+                    waiting = False
+                    print(f"{msg.decode("utf-8")} joined\ntype /quit to quit w/o errors\n\n")
         #Someone is already in the room. Ask them for approval
         elif (before.text).splitlines()[0] == "1":
             before = rq.get(f"http://{server}/{room}.txt") 
             msg_mode = 2
             waiting = True
-            others.clear(clear_cmd)
-            print("waiting for response")
+            state = 0
+            other_side_ip = "Unknown ip"
             while waiting:
                 others.wait(10)
+                state = animate_text("Waiting for response", clear_cmd, state)
                 r = rq.get(f"http://{server}/{room}.txt")
                 if (r.text).splitlines()[1] != (before.text).splitlines()[1]:
                     try:
@@ -98,16 +129,23 @@ def main():
                         print("Rejected")
                         others.quit()
                     if msg.decode("utf-8") == get_public_ip():
-                        print(f"Welcome to chat room {room}")
+                        r = rq.get(f"http://{server}/?start=blank")
+                        others.clear(clear_cmd)
+                        print(f"Welcome to chat room {room}\ntype /quit to quit w/o errors\n\n")
                         waiting = False
         #Room is full
         else:
             print("room is full")
             others.quit()
+
+        #Start threading
+        t = threading.Thread(target=load_new_msg, args=(server, room, msg_mode, other_side_ip, private_key))
+        t.start() #Start recieving msg
         #Joined chat room, the communication begins
         chatting = True
         while chatting:
-            pass #Todo
+            my_msg = input("> ")
+            send_msg(server,my_msg,server_key)
 
 if __name__ == "__main__":
     main()
