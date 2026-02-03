@@ -23,7 +23,7 @@ def main():
     crypto.save_pub_key(public_key, "key")
     rooms, access_code = others.get_env() #Only for docker
     if access_code == None: access_code = others.get_safe_input("Create password for server access: ")
-    if rooms == None: int(input("Enter how many chat rooms you'd like: "))
+    if rooms == None: rooms = int(input("Enter how many chat rooms you'd like: "))
     rooms = others.create_rooms(rooms)
     others.clear(clear_cmd)
     print("Server is running")
@@ -91,6 +91,10 @@ def main():
                                     #Join new room
                                     with open(f"{room_num}.txt", "w") as f: f.write(f"{rooms[room_num-1]}\n") #Write status to the file
                                 elif rooms[room_num-1] == 1 and ip_to_room[ip] != room_num: #Ask the other side for approval to join
+                                    if ip_to_room[ip] != 0:
+                                        rooms[ip_to_room[ip]-1] -= 1
+                                        with open(f"{ip_to_room[ip]}.txt", "w") as f: f.write(f"{rooms[ip_to_room[ip]-1]}\n")#Leave the previous room
+                                        ip_to_room[ip] = 0
                                     other_side = next(k for k, v in ip_to_room.items() if v == room_num)
                                     if ip_to_key[other_side] == True: #Key obtained. E2EE available
                                         for value in keys: 

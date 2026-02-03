@@ -15,6 +15,8 @@
 
 ## Important Notes
 
+* If client leaves using ^C after joining room and waiting there, the client can't enter the same room (The client MUST enter a new one to become legitimate client once again)
+* **Try to AVOID ^C AT ANY COSTS**
 * If some IP addr. exceeds the **ddos_protection** var limit, than the program stores the IP addr. into `report.txt` permanently to your dir. BUT, after running the server again, the contents of `report.txt` will be overwritten.
 * Use `report.txt` as your way to ban potential threats by using **ufw**.
 * Change **ddos_protection** var to your own preffered value.
