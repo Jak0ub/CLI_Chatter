@@ -25,8 +25,8 @@ def generate_keys(): #Generate your own pub and priv keys
     public_key = private_key.public_key()
     return private_key, public_key
 
-def save_pub_key(public_key): #Save pub key to file (for server only)
-    with open("key.pub", "wb") as f:
+def save_pub_key(public_key, name): #Save pub key to file (for server only)
+    with open(f"{name}.pub", "wb") as f:
         f.write(public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo))
 
 def key_to_bytes(public_key): #Return readable string of pub key

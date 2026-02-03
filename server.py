@@ -18,13 +18,13 @@ def main():
     clear_cmd = others.os_def()
     others.clear(clear_cmd)
     private_key, public_key = crypto.generate_keys()
-    crypto.save_pub_key(public_key)
+    crypto.save_pub_key(public_key, "key")
     access_code = others.get_safe_input("Create password for server access: ")
     rooms = others.create_rooms(int(input("Enter how many chat rooms you'd like: ")))
     others.clear(clear_cmd)
     print("Server is running")
 
-
+    room_quit = 0
     ddos_protection = 30 #If one IP exceed this number of packets. The server shuts down this IP
     resolved = 0 #Number of requests resolved already
     access_granted = []
@@ -39,22 +39,25 @@ def main():
     while True:
         others.wait(0.1)
         with open("../log.txt", "r") as f: lines = f.readlines()
-        if resolved > 100: 
-            with open("../log.txt", "w") as f: f.write(""); resolved = 0#Clear logs
         lines = lines[(resolved):]#exclude the lines already resolved
+        if resolved > 100: #After 100 packets. Delete logs and write a report of banned IP addr. CHANGE THIS NUMBER IF NEEDED!
+            others.write_report(Addresses, banned_ip) #Write a report of banned IP addr. if needed. 
+            with open("../log.txt", "w") as f: f.write(""); resolved = 0#Clear logs
 
         for line in lines: #Resolving requests
             ip, params = others.info(line)
-            if ip in banned_ip: continue
             #Packet counter. DDOS PROTECTION
+            print(banned_ip)
+            print(Addresses)
             if ip not in access_granted:
                 if len(Addresses) == 0: Addresses.append([ip, 0])
                 for adr in Addresses:
                     if adr[0] == ip: 
                         Addresses[Addresses.index(adr)][1] += 1
-                        if Addresses[Addresses.index(adr)][1] >= ddos_protection: banned_ip.append(ip)
+                        if Addresses[Addresses.index(adr)][1] >= ddos_protection and ip not in banned_ip: banned_ip.append(ip)
                         break
-                    elif adr[0] != ip and Addresses.index(adr) == len(Addresses): Addresses.append([ip, 0]) 
+                    elif adr[0] != ip and Addresses.index(adr) == len(Addresses)-1: Addresses.append([ip, 0]) #Not logged yet
+                if ip in banned_ip: continue
                 #Access solution
                 #If the access_code+OriginIP hashed match the parameter given. The IP has access granted. Just prevention system
                 access_code_for_this_ip = f"{access_code}{ip}"
@@ -99,7 +102,7 @@ def main():
                         #If key for this ip was not saved, save it
                         if keys == []: keys.append([ip, key]); ip_to_key[ip] = True
                         for values in keys:
-                            if values[0] == ip: break
+                            if values[0] == ip: values[1] = key
                             if values[0] != ip and keys.index(values) == len(keys)-1: keys.append([ip, key]); ip_to_key[ip] = True
 
                     elif params.split("=")[0].lower() == "respond":
@@ -119,34 +122,45 @@ def main():
                             for val in ip_to_room:
                                 if ip_to_room[val] == ip_to_room[ip] and rooms[ip_to_room[ip]-1] == 1 and val != ip: #Room was not yet updated and this is valid response to start chatting
                                     rooms[ip_to_room[ip]-1] += 1
+                                    other_side = val
                                     with open(f"{ip_to_room[ip]}.txt", "w") as f: f.writelines(["2\n", "\n", "\n"]) #Prepare file for two way communication
                                     #Append both IP for future communication
                                     communicating_ip.append(ip)  #The requester IP is 1st
                                     communicating_ip.append(val) #Origin IP is 2nd
+                                    break
                         except: continue #Not valid request? Skip this packet
+                        #Save client-side pub keys
+                        for key in keys:
+                            if key[0] == ip:
+                                side1_key = key[1]
+                            elif key[0] == val:
+                                side2_key = key[1]
+                        others.create_room_share(ip_to_room[ip], side1_key, side2_key)
+                        
 
                     elif params.split("=")[0].lower() == "msg":
                         if ip in communicating_ip:
                             try:
-                                msg = decode(params, "msg", private_key)
+                                msg = crypto.base64_decode(params.split(f"msg=")[1].split(" ")[0]) #Base64 decode encrypted msg
+                                msg = crypto.str_to_bytes(msg)#Str to bytes
                                 with open(f"{ip_to_room[ip]}.txt", "r") as f: l = f.readlines() #Load room data to change only specific line
-                                for val in ip_to_room:
-                                    if ip_to_room[val] == ip_to_room[ip] and val != ip: #In same chat room but not the same IP
-                                        other_side = val 
-                                for key in keys:
-                                    if key[0] == other_side: other_side_key = key[1] #Get pub key of recieving side
-                                l[(communicating_ip.index(ip)%2)+1] = f"{crypto.encrypt(other_side_key, msg.decode("utf-8"))}\n" #Encrypt
+                                other_side = others.get_other_side(ip_to_room, ip)
+                                l[(communicating_ip.index(ip)%2)+1] = f"{msg}\n" #Save msg
                                 with open(f"{ip_to_room[ip]}.txt", "w")as f: f.writelines(l) #Save changes
                             except: continue #Not valid request? Skip
-                            
                     
-
-
-                    
-
-
+                    elif params.split("=")[0].lower() == "quit":
+                        try:
+                            #Get needed info about both sides
+                            if ip in communicating_ip:
+                                other_side = others.get_other_side(ip_to_room, ip)
+                                room_quit = ip_to_room[ip]
+                            #Delete all logs about clients
+                            communicating_ip, ip_to_room, ip_to_key, keys, rooms, Addresses, access_granted = others.clean_room(room_quit, ip, other_side, communicating_ip, ip_to_room, ip_to_key, keys, rooms, Addresses, access_granted)
+                        except: continue
         resolved += len(lines)
 
+    #todo
     if others.clean(server) == 1:
         print("server stopped successfully")
     else:
