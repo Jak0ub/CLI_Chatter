@@ -49,8 +49,6 @@ def main():
         for line in lines: #Resolving requests
             ip, params = others.info(line)
             #Packet counter. DDOS PROTECTION
-            print(banned_ip)
-            print(Addresses)
             if ip not in access_granted:
                 if len(Addresses) == 0: Addresses.append([ip, 0])
                 for adr in Addresses:
