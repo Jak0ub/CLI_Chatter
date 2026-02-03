@@ -7,3 +7,4 @@ pycparser==3.0
 requests==2.32.5
 urllib3==2.6.3
 wcwidth==0.5.3
+prompt_toolkit==3.0.52
