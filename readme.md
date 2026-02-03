@@ -17,6 +17,7 @@
 * If some IP addr. exceeds the **ddos_protection** var limit, than the program stores the IP addr. into `report.txt` permanently to your dir. BUT, after running the server again, the contents of `report.txt` will be overwritten.
 * Use `report.txt` as your way to ban potential threats by using **ufw**.
 * Change **ddos_protection** var to your own preffered value.
+* Change **port** var to any port you'd like to avoid bots.
 * You can also change after how many packets the logs will be erased and `report.txt` saved
 * If you intent to deploy this server to someone, give them precompiled version of client-side code which they can't edit. You can use fx. **pyinstaller**
 * **READ THE FOLLOWING WARNINGS!**

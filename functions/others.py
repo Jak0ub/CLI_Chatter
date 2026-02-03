@@ -25,11 +25,11 @@ def check(): #Ensure the server is ran only on Unix systems
         print("Only for Unix")
         sys.exit()
 
-def init(): #Prepare the server files&folders + start the server 
+def init(port): #Prepare the server files&folders + start the server 
     os.system("mkdir hosting && mkdir hosting/viewer")
     os.chdir("hosting/viewer")
     with open("auth.txt", "w") as f: pass
-    server = subprocess.Popen(["python3", "-m", "http.server"], stderr=open("../log.txt", "w")) #Start server and redirect stderr stream to log file
+    server = subprocess.Popen(["python3", "-m", "http.server", str(port)], stderr=open("../log.txt", "w")) #Start server and redirect stderr stream to log file
     return server
 
 def clean(server): #Clear logs and stop the server

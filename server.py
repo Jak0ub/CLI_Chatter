@@ -12,8 +12,10 @@ def retrieve_key(params):
     return crypto.load_pub_key(key)
 
 def main():
+    port = 9001
+
     others.check()
-    server = others.init()
+    server = others.init(port)
     others.wait(1) #Ensure clear terminal
     clear_cmd = others.os_def()
     others.clear(clear_cmd)
