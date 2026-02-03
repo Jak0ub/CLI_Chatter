@@ -136,4 +136,14 @@ def write_report(Addr, banned_ip):
                 if address[0] == ip:
                     lines.append(f"{address[0]} -> {address[1]}x packets\n")
         with open("../../report.txt", "w") as f: f.writelines(lines)
-    
+
+def get_env():#Only for docker
+    #_ at the end just in case 
+    try: 
+        rooms_count = os.getenv("server_rooms_")
+        rooms_count = int(rooms_count)
+        if rooms_count > 100: rooms_count = None #More than 100 rooms for docker is overkill
+    except: rooms_count = None
+    try: access_code = os.getenv("server_access_code_")
+    except: access_code = None
+    return rooms_count, access_code

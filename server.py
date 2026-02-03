@@ -21,8 +21,10 @@ def main():
     others.clear(clear_cmd)
     private_key, public_key = crypto.generate_keys()
     crypto.save_pub_key(public_key, "key")
-    access_code = others.get_safe_input("Create password for server access: ")
-    rooms = others.create_rooms(int(input("Enter how many chat rooms you'd like: ")))
+    rooms, access_code = others.get_env() #Only for docker
+    if access_code == None: access_code = others.get_safe_input("Create password for server access: ")
+    if rooms == None: int(input("Enter how many chat rooms you'd like: "))
+    rooms = others.create_rooms(rooms)
     others.clear(clear_cmd)
     print("Server is running")
 

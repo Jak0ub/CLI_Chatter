@@ -1,5 +1,6 @@
 # CLI_Chatter
 
+* Available for docker w/o interactive mode. Everything is automated. 
 * Only for WAN. 
 * Server is only for UNIX. Client is for all platforms.
 * E2EE CLI chat app created using python.
@@ -31,27 +32,16 @@
 
 ## Instalation
 
-### 1️⃣ Download
-```
-git clone https://github.com/Jak0ub/CLI_Chatter
-cd CLI_Chatter
-```
 
-### 2️⃣ Venv creation
-
-`Unix based`
-
+### Download the docker
 ```
-python3 -m venv venv
-source venv/bin/activate
-pip install -r req.txt
+curl -L "https://raw.githubusercontent.com/jak0ub/CLI_Chatter/main/Dockerfile" -o Dockerfile
+curl -L "https://raw.githubusercontent.com/jak0ub/CLI_Chatter/main/docker-compose.yml" -o docker-compose.yml
+touch report_from_docker.txt
 ```
-`Windows`
+### EDIT THE `docker-compose.yml` PASSWORD AND PORT
 
-
+### Start the docker
 ```
-python -m venv venv
-.\venv\Scripts\activate
-pip install -r req.txt
+sudo docker compose up -d
 ```
-

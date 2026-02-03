@@ -1,0 +1,17 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cli-chatter-server:latest
+    container_name: cli-chatter-server
+    restart: always
+    environment:
+      - server_access_code_=Password # Server password (CHANGE!)
+      - server_rooms_=3 # Number of rooms
+    ports:
+      - "8080:9001" # Change 8080 to your public port
+    volumes:
+          - ./report_from_docker.txt:/app/report.txt #Save the report from docker to local file.
+    stdin_open: true
+    tty: true
