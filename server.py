@@ -117,7 +117,7 @@ def main():
                             except: continue
                             for value in keys: 
                                 if value[0] == msg.decode("utf-8"): pub_key_client = value[1]  
-                            with open(f"{ip_to_room[ip]}.txt", "w") as f: f.writelines(["1\n", f"{crypto.encrypt(pub_key_client, f'{msg.decode("utf-8")}')}"])
+                            with open(f"{ip_to_room[ip]}.txt", "w") as f: f.writelines(["1\n", f"""{crypto.encrypt(pub_key_client, f'{msg.decode("utf-8")}')}"""])
                     
                     elif params.split("=")[0].lower() == "start":
                         try:
