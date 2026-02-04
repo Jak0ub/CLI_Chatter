@@ -103,7 +103,7 @@ backend = polling
 maxretry= 1
 findtime= 1
 bantime = 86400
-action  = iptables[name=CliChatter, protocol=all]
+action = iptables-multiport[name=CliChatter, chain=DOCKER-USER, port="1:65535", protocol=tcp]
 ```
 *Start the program*
 ```
