@@ -46,8 +46,9 @@
 **`report.txt` will be now saved to your current dir as `report_from_docker.txt`. The file WILL be overwritten after restarting the docker.**
 
 
-### Download the docker
+### Download the docker (/tmp is **NEEDED** for mounting to work (permissions). Trust me. I found out the hard way)
 ```
+cd /tmp
 curl -L "https://raw.githubusercontent.com/jak0ub/CLI_Chatter/main/Dockerfile" -o Dockerfile
 curl -L "https://raw.githubusercontent.com/jak0ub/CLI_Chatter/main/docker-compose.yml" -o docker-compose.yml
 touch report_from_docker.txt
@@ -90,12 +91,12 @@ ignoreregex = ^Logged IP addresses|^If needed|^$
 ```
 vi /etc/fail2ban/jail.d/cli_chatter.local
 ```
-*Paste this and **EDIT THE LOG FILE** inside vi session and use `ESC` + `:wq` + `Enter`*
+*Paste this inside vi session and use `ESC` + `:wq` + `Enter`*
 ```
 [cli_chatter]
 enabled = true
 filter  = cli_chatter
-logpath = /YOUR/OWN/PATH/report_from_docker.txt
+logpath = /tmp/report_from_docker.txt
 backend = polling
 maxretry= 1
 findtime= 1
