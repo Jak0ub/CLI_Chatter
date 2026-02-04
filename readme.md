@@ -85,6 +85,7 @@ vi /etc/fail2ban/filter.d/cli_chatter.conf
 *Paste this inside vi session and use `ESC` + `:wq` + `Enter`*
 ```
 [Definition]
+datepattern = ^
 failregex = ^<HOST>\s+->\s+\d+x packets$
 ignoreregex = ^Logged IP addresses|^If needed|^$
 ```
