@@ -105,5 +105,6 @@ action  = iptables[name=CliChatter, protocol=all]
 ```
 *Start the program*
 ```
-sudo systemctl start fail2ban 
+systemctl start fail2ban 
+systemctl enable fail2ban
 ```
