@@ -52,6 +52,7 @@ cd /tmp
 curl -L "https://raw.githubusercontent.com/jak0ub/CLI_Chatter/main/Dockerfile" -o Dockerfile
 curl -L "https://raw.githubusercontent.com/jak0ub/CLI_Chatter/main/docker-compose.yml" -o docker-compose.yml
 touch report_from_docker.txt
+chmod 777 report_from_docker.txt
 ```
 ### EDIT THE `docker-compose.yml` PASSWORD AND PORT
 
