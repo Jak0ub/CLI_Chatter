@@ -1,4 +1,4 @@
-# CLI_Chatter
+# CLI_Chatter (Docker and DDoS solution provided)
 
 > ℹ️ **Info:**
 >  **Please ignore the IP addresses in the GIF below. It shows the program in a lab testing environment.**
@@ -46,7 +46,7 @@
 **`report.txt` will be now saved to your current dir as `report_from_docker.txt`. The file WILL be overwritten after restarting the docker.**
 
 
-### Download the docker (/tmp is **NEEDED** for mounting to work (permissions). Trust me. I found out the hard way)
+### Download the docker
 ```
 cd /tmp
 curl -L "https://raw.githubusercontent.com/jak0ub/CLI_Chatter/main/Dockerfile" -o Dockerfile
