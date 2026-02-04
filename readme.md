@@ -41,7 +41,7 @@
 >  After using `/quit` your terminal might stop working as intended. If you encounter this type of error, use `reset` command (for Unix)
 
 
-## Instalation
+# Installation
 
 **`report.txt` will be now saved to your current dir as `report_from_docker.txt`. The file WILL be overwritten after restarting the docker.**
 
@@ -57,4 +57,52 @@ touch report_from_docker.txt
 ### Start the docker
 ```
 sudo docker compose up -d
+```
+
+# DDOS protection setup
+
+* Do not share server password with everyone. Once someone has your password, they can send as many packets as they'd like.
+* Server stores potential threats inside `report.txt` or `report_from_docker.txt`(docker version) to your current dir.
+* If you want to ban any IP inside this report, use **fail2ban**. **Setup provided below**
+
+### **Fail2ban setup** for *docker* (Ban any ip afer 10 failed attempts until server is rebooted)
+
+*Switch to super user*
+```
+sudo su
+```
+*Install fail2ban(Use your own package manager)*
+```
+apt install fail2ban
+```
+
+*Edit conf file*
+```
+vi /etc/fail2ban/filter.d/cli_chatter.conf
+```
+*Paste this inside vi session and use `ESC` + `:wq` + `Enter`*
+```
+[Definition]
+failregex = ^<HOST>\s+->\s+\d+x packets$
+ignoreregex = ^Logged IP addresses|^If needed|^$
+```
+*Now edit another config file*
+```
+vi /etc/fail2ban/jail.d/cli_chatter.local
+```
+*Paste this and **EDIT THE LOG FILE** inside vi session and use `ESC` + `:wq` + `Enter`*
+```
+[cli_chatter]
+enabled = true
+filter  = cli_chatter
+logpath = /YOUR/OWN/PATH/report_from_docker.txt
+backend = polling
+maxretry= 1
+findtime= 1
+bantime = 86400
+action  = iptables[name=CliChatter, protocol=all]
+```
+*Start the program*
+```
+sudo systemctl start fail2ban 
 ```
