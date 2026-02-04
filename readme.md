@@ -1,5 +1,14 @@
 # CLI_Chatter
 
+> ℹ️ **Info:**
+>  **Please ignore the IP addresses in the GIF below. It shows the program in a lab testing environment.**
+
+
+![gif](https://github.com/Jak0ub/Jak0ub/blob/main/cli_chatter.gif)
+
+> ⚠️ **Warning:**
+>  This project is meant to be used by smaller groups of chatters (2-10max at one time). 
+
 * Available for docker w/o interactive mode. Everything is automated. 
 * Only for WAN. 
 * Server is only for UNIX. Client is for all platforms.
