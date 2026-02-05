@@ -1,37 +1,42 @@
 # CLI_Chatter (Docker and DDoS solution provided)
 
+### Why should you use this tool?
+* **To anyone, the server looks like a forgotten open port of python http.server module (shown below).**
+* [Easy to setup with docker. ](#installation)
+* [DDoS solution provided](#ddos-protection-setup) (30 packets w/o entering your password using client.py and the IP is banned).
+* Looks harmless
+* Doesn't store any logs. You can also use /quit to delete all logs from RAM on the server.
+* Only the server is needed to be publicly available (clients never talk to each other).
+* Great tool for **2-10chatters at one time.**
+* Replay attacks wont work.
+* Server is only for UNIX, client is for all platforms.
+* Security is priority #1 of this project.
+* Code is separated into multiple files for better modularity.
+* After 100 packets. The server clears all logs. When server is shutting down, all logs are deleted.
+* BUT, works only on WAN. Avoid using LAN. 2 clients using the same public IP at the same time is going to crash both clients. **If you want to chat across LAN, use different tool.** *`Be careful about who you give your server access code to!`*
+
+<table>
+  <tr>
+    <td><img src="https://raw.githubusercontent.com/Jak0ub/Jak0ub/refs/heads/main/cli-chatter-1.png" width="400"></td>
+    <td><img src="https://raw.githubusercontent.com/Jak0ub/Jak0ub/refs/heads/main/cli-chatter-2.png" width="400"></td>
+  </tr>
+</table>
+
 > ℹ️ **Info:**
 >  **Please ignore the IP addresses in the GIF below. It shows the program in a lab testing environment.**
 
 
 ![gif](https://github.com/Jak0ub/Jak0ub/blob/main/cli_chatter.gif)
 
-> ⚠️ **Warning:**
->  This project is meant to be used by smaller groups of chatters (2-10max at one time). 
-
-* Available for docker w/o interactive mode. Everything is automated. 
-* Only for WAN. 
-* Server is only for UNIX. Client is for all platforms.
-* E2EE CLI chat app created using python.
-* Code is separated into multiple files for better modularity.
-* Program allows (default) 30 requests from each IP before shuting the IP down -> (default) 10 password attempts for each IP.
-* After sending correct access code. IP has unlimited packet count to be processed so `choose carefully who you give your password to`.
-* After 100 packets. The server clears all logs. When server is shutting down, all logs are deleted.
-* Packet sniffing attack is not problem. Each IP has unique code for authorization process generated based on your server-side code.
-* Server does not store any logs.
-* Even the server can't read your messages.
-* USE /quit to delete all logs about your IP from RAM on the server. 
 
 ## Important Notes
 
 * If client leaves using ^C after joining a room and waiting there, the client can't enter the same room (The client MUST enter a new one to become legitimate client once again)
 * **Try to AVOID ^C AT ANY COSTS**
-* If some IP addr. exceeds the **ddos_protection** var limit, than the program stores the IP addr. into `report.txt` permanently to your dir. BUT, after running the server again, the contents of `report.txt` will be overwritten.
-* Use `report.txt` as your way to ban potential threats by using **ufw**.
-* Change **ddos_protection** var to your own preffered value.
-* Change **port** var to any port you'd like to avoid bots.
-* You can also change after how many packets the logs will be erased and `report.txt` saved
-* If you intent to deploy this server to someone, give them precompiled version of client-side code which they can't edit. You can use fx. **pyinstaller**
+* If some IP addr. exceeds the **ddos_protection** var limit, than the program stores the IP addr. into `report.txt` permanently to your dir. **Should be used with fail2ban.**
+* Change **ddos_protection** var to your own preffered value. **(Not for docker)**
+* Change **port** var to any port you'd like to avoid bots. **(Not for docker)**
+* You can also change after how many packets the logs will be erased and `report.txt` saved. **(Not for docker)**
 * **READ THE FOLLOWING WARNINGS!**
 
 > ⚠️ **Warning:**
@@ -54,7 +59,7 @@ curl -L "https://raw.githubusercontent.com/jak0ub/CLI_Chatter/main/docker-compos
 touch report_from_docker.txt
 chmod 777 report_from_docker.txt
 ```
-### EDIT THE `docker-compose.yml` PASSWORD AND PORT
+### **EDIT THE `docker-compose.yml` PASSWORD AND PORT**
 
 ### Start the docker
 ```
@@ -63,9 +68,9 @@ sudo docker compose up -d
 
 # DDOS protection setup
 
-* Do not share server password with everyone. Once someone has your password, they can send as many packets as they'd like.
+* **Do not share server password with everyone. Once someone has your password, they can send as many packets as they'd like.**
 * Server stores potential threats inside `report.txt` or `report_from_docker.txt`(docker version) to your current dir.
-* If you want to ban any IP inside this report, use **fail2ban**. **Setup provided below**
+* If you want to ban any IP inside this report, use **fail2ban**
 
 ### **Fail2ban setup** for *docker* (Ban any ip afer 10 failed attempts until server is rebooted)
 
