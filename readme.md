@@ -3,7 +3,7 @@
 ### Why should you use this tool?
 * **To anyone, the server looks like a forgotten open port of python http.server module (shown below).**
 * [Easy to setup with docker. ](#installation)
-* [DDoS solution provided](#ddos-protection-setup) (30 packets w/o entering your password using client.py and the IP is banned).
+* [DDoS solution provided](#ddos-protection-setup) + **You can edit how many packets unauthorized IP can send (default 15 packets = 5 password attempts) before being banned (Only with fail2ban usage).**
 * Looks harmless
 * Doesn't store any logs. You can also use /quit to delete all logs from RAM on the server.
 * Only the server is needed to be publicly available (clients never talk to each other).
@@ -34,8 +34,7 @@
 * If client leaves using ^C after joining a room and waiting there, the client can't enter the same room (The client MUST enter a new one to become legitimate client once again)
 * **Try to AVOID ^C AT ANY COSTS**
 * If some IP addr. exceeds the **ddos_protection** var limit, than the program stores the IP addr. into `report.txt` permanently to your dir. **Should be used with fail2ban.**
-* Change **ddos_protection** var to your own preffered value. **(Not for docker)**
-* Change **port** var to any port you'd like to avoid bots. **(Not for docker)**
+* Change **port** var to any port you'd like to avoid bots.
 * You can also change after how many packets the logs will be erased and `report.txt` saved. **(Not for docker)**
 * **READ THE FOLLOWING WARNINGS!**
 
@@ -59,7 +58,7 @@ curl -L "https://raw.githubusercontent.com/jak0ub/CLI_Chatter/main/docker-compos
 touch report_from_docker.txt
 chmod 777 report_from_docker.txt
 ```
-### **EDIT THE `docker-compose.yml` PASSWORD AND PORT**
+### **EDIT THE `docker-compose.yml` PASSWORD, PORT and PACKET_LIMIT**
 
 ### Start the docker
 ```
@@ -72,7 +71,7 @@ sudo docker compose up -d
 * Server stores potential threats inside `report.txt` or `report_from_docker.txt`(docker version) to your current dir.
 * If you want to ban any IP inside this report, use **fail2ban**
 
-### **Fail2ban setup** for *docker* (Ban any ip afer 10 failed attempts until server is rebooted)
+### **Fail2ban setup** for *docker* (Ban any IP after specified amount of packets until the server is rebooted)
 
 *Switch to super user*
 ```

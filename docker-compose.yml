@@ -9,6 +9,7 @@ services:
     environment:
       - server_access_code_=Password # Server password (CHANGE!)
       - server_rooms_=3 # Number of rooms
+      - server_packet_limit=15 #Packet limit until authorization(default 5 password attempts).
     ports:
       - "8080:9001" # Change 8080 to your public port
     volumes:

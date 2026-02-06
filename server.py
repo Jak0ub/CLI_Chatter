@@ -21,7 +21,7 @@ def main():
     others.clear(clear_cmd)
     private_key, public_key = crypto.generate_keys()
     crypto.save_pub_key(public_key, "key")
-    rooms, access_code = others.get_env() #Only for docker
+    rooms, access_code, ddos_protection = others.get_env()
     if access_code == None: access_code = others.get_safe_input("Create password for server access: ")
     if rooms == None: rooms = int(input("Enter how many chat rooms you'd like: "))
     rooms = others.create_rooms(rooms)
@@ -29,7 +29,6 @@ def main():
     print("Server is running")
 
     room_quit = 0
-    ddos_protection = 30 #If one IP exceed this number of packets. The server shuts down this IP
     resolved = 0 #Number of requests resolved already
     access_granted = []
     Addresses = []

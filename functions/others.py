@@ -146,4 +146,9 @@ def get_env():#Only for docker
     except: rooms_count = None
     try: access_code = os.getenv("server_access_code_")
     except: access_code = None
-    return rooms_count, access_code
+    try: 
+        ddos_protection = os.getenv("server_packet_limit")
+        ddos_protection = int(ddos_protection)
+        if ddos_protection > 30: ddos_protection = 30 #More than 30 packet limit is not the best practice
+    except: ddos_protection = 15 #Not using docker? Edit this number to customize the packet limit
+    return rooms_count, access_code, ddos_protection
