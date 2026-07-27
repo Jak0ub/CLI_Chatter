@@ -76,12 +76,12 @@ def create_rooms(num_of_rooms): #Create rooms for clients
         with open(f"{i+1}.txt", "w") as f: f.write("0")
     return rooms
 
-def create_room_share(room_num,key1,key2): #Create dir for pub key exchange
+def create_room_share(room_num,key1,key2,access_code): #Create dir for pub key exchange
     os.system(f"mkdir {room_num}")
     wait(0.1)
     os.chdir(f"{room_num}")
-    crypto.save_pub_key(key1,"1")
-    crypto.save_pub_key(key2,"2")
+    crypto.save_pub_key(key1,"1",access_code)
+    crypto.save_pub_key(key2,"2",access_code)
     wait(0.1)
     os.chdir("..")
 

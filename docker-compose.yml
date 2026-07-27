@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      network: host
     image: cli-chatter-server:latest
     container_name: cli-chatter-server
     restart: always

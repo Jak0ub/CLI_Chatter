@@ -45,17 +45,30 @@ def load_new_msg(server, room, msg_mode, other_side_ip, private_key, clear_cmd):
             except: print(f" >>Error decrypting msg from {other_side_ip}"); continue
             if msg.decode("utf-8").lower() == "/quit": #Recieved /quit
                 print("Other side has left the chat. Use /quit to delete all logs")
+
+def load_server_key(r,access_code):
+    try:
+        key = (r.text).encode("ascii")
+        key = crypto.decrypt_using_passwd(key, access_code)
+        key = key.split("\n")
+        key.insert(0, "-----BEGIN PUBLIC KEY-----")
+        key.append("-----END PUBLIC KEY-----")
+        key = "\n".join(key)
+        key = key.encode("ascii")
+        return crypto.load_pub_key(key)
+    except:
+        input("MITM detected!")
+
 def main():
     clear_cmd = others.os_def()
     msg_mode = 0
     server = input("Enter the server ip with port(default port 80): ")
     access = check_access(server) #If access granted, than skip following if statement
-
+    access_code = others.get_safe_input("Enter the server access code: ")
     if access != True: 
-        access_code = others.get_safe_input("Enter the server access code: ")
         #Send the server Access_code+YourPublicIP hashed so noone can replicate your request with sucess
-        access_code = f"{access_code}{get_public_ip()}"
-        hashed_access_code = crypto.hash_text(access_code)
+        access_code_secure = f"{access_code}{get_public_ip()}"
+        hashed_access_code = crypto.hash_text(access_code_secure)
         rq.get(f"http://{server}/?code={hashed_access_code}")
         others.wait(1)
         access = check_access(server)
@@ -65,7 +78,7 @@ def main():
         #Generating own keys and getting server public key for E2EE
         private_key, public_key = crypto.generate_keys()
         r = rq.get(f"http://{server}/key.pub")
-        server_key = crypto.load_pub_key((r.text).encode("utf-8"))
+        server_key = load_server_key(r, access_code)
 
         #Getting room info
         rooms = []
@@ -85,7 +98,7 @@ def main():
         room = input("Enter chat room number: ")
         room_enc = crypto.encrypt(server_key, room)
         before = rq.get(f"http://{server}/{room}.txt") #Get room details
-        rq.get(f"http://{server}/?key={crypto.base64_encode(str(crypto.key_to_bytes(public_key)))}") #Send the pub key
+        crypto.send_key(server,public_key,access_code)
         others.wait(1)
         rq.get(f"http://{server}/?room={crypto.base64_encode(str(room_enc))}") #Send room info
         others.wait(1)
@@ -150,7 +163,7 @@ def main():
             others.quit()
         others.wait(1)#Wait for server to save pub keys
         r = rq.get(f"http://{server}/{room}/{msg_mode}.pub")
-        other_side_key = crypto.load_pub_key((r.text).encode("utf-8"))
+        other_side_key = load_server_key(r, access_code)
         #Start threading
         session = PromptSession()
         t = threading.Thread(target=load_new_msg, args=(server, room, msg_mode, other_side_ip, private_key, clear_cmd))

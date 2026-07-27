@@ -4,19 +4,19 @@ WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get install -y \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update
 
 RUN useradd -m app && chown -R app:app /app
 USER app
 
-RUN git clone https://github.com/Jak0ub/CLI_Chatter . \
-    && rm -rf .git
+#Venv outside of WORKDIR so it can't be overwritten
+RUN python3 -m venv /home/app/venv
 
-RUN python3 -m venv venv
-ENV PATH="/app/venv/bin:$PATH"
-
+ENV PATH="/home/app/venv/bin:$PATH"
+#For a beter build times
+COPY --chown=app:app req.txt .
 RUN pip install --no-cache-dir -r req.txt
+
+COPY --chown=app:app . .
 
 CMD ["python3", "server.py"]

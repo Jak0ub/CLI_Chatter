@@ -5,10 +5,15 @@ def decode(params, query, key):
     answer = crypto.str_to_bytes(answer)#Str to bytes
     return crypto.decrypt(key,answer) #Decrypt text from client using private key
 
-def retrieve_key(params):
+def retrieve_key(params, access_code):
     key = params.split("key=")[1].split(" ")[0]
-    key = crypto.base64_decode(key)
     key = crypto.str_to_bytes(key)
+    key = crypto.decrypt_using_passwd(key, access_code)
+    key = key.split("\n")
+    key.insert(0, "-----BEGIN PUBLIC KEY-----")
+    key.append("-----END PUBLIC KEY-----")
+    key = "\n".join(key)
+    key = key.encode("ascii")
     return crypto.load_pub_key(key)
 
 def main():
@@ -20,9 +25,9 @@ def main():
     clear_cmd = others.os_def()
     others.clear(clear_cmd)
     private_key, public_key = crypto.generate_keys()
-    crypto.save_pub_key(public_key, "key")
     rooms, access_code, ddos_protection = others.get_env()
     if access_code == None: access_code = others.get_safe_input("Create password for server access: ")
+    crypto.save_pub_key(public_key, "key", access_code)
     if rooms == None: rooms = int(input("Enter how many chat rooms you'd like: "))
     rooms = others.create_rooms(rooms)
     others.clear(clear_cmd)
@@ -102,7 +107,7 @@ def main():
   
                     elif params.split("=")[0].lower() == "key":
                         #Decode the key and make it usable
-                        try: key = retrieve_key(params)
+                        try: key = retrieve_key(params, access_code)
                         except: continue
                         #If key for this ip was not saved, save it
                         if keys == []: keys.append([ip, key]); ip_to_key[ip] = True
@@ -140,7 +145,7 @@ def main():
                                 side1_key = key[1]
                             elif key[0] == val:
                                 side2_key = key[1]
-                        others.create_room_share(ip_to_room[ip], side1_key, side2_key)
+                        others.create_room_share(ip_to_room[ip], side1_key, side2_key, access_code)
                         
 
                     elif params.split("=")[0].lower() == "msg":
