@@ -76,7 +76,7 @@ chmod 666 report_from_docker.txt
 
 ### Start the docker
 ```
-sudo docker compose up -d
+docker compose build --no-cache && docker compose up -d
 ```
 
 # DDOS protection setup

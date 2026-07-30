@@ -91,4 +91,4 @@ def get_room_info(server,private_key):
     count_of_rooms = 0
     for room in rooms:
         count_of_rooms += 1
-        print(f"{count_of_rooms}. room -> {room.split("-> ")[1].split("/")[0]}/2 online")
+        print(f"{count_of_rooms}. room -> {room.split('-> ')[1].split('/')[0]}/2 online")
