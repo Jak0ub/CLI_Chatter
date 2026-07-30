@@ -67,8 +67,8 @@ python client.py
 ### Download the docker
 ```
 cd /tmp
-curl -L "https://raw.githubusercontent.com/jak0ub/CLI_Chatter/main/Dockerfile" -o Dockerfile
-curl -L "https://raw.githubusercontent.com/jak0ub/CLI_Chatter/main/docker-compose.yml" -o docker-compose.yml
+git clone https://github.com/Jak0ub/Cli_Chatter
+cd Cli_chatter
 touch report_from_docker.txt
 chmod 666 report_from_docker.txt
 ```
