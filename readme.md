@@ -54,7 +54,7 @@
 
 ```
 git clone https://github.com/Jak0ub/Cli_Chatter
-cd Cli_chatter
+cd Cli_Chatter
 pip install -r req.txt
 python client.py
 ```
