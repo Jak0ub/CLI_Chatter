@@ -68,7 +68,7 @@ python client.py
 ```
 cd /tmp
 git clone https://github.com/Jak0ub/Cli_Chatter
-cd Cli_chatter
+cd Cli_Chatter
 touch report_from_docker.txt
 chmod 666 report_from_docker.txt
 ```
