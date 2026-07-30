@@ -1,25 +1,27 @@
 # CLI_Chatter (Docker and DDoS solution provided)
 ### How does it work?
 
-* Server runs as Simple HTTP Server(shown in images below), so no cheap network scan can suggest real intent (Chatting app). Only the encrypted server public key is publicly available, so the server doesn't look that blank.
+* Server runs as **Simple HTTP Server(shown in images below)**, so no network scan can suggest real intent (Chatting app). Some network analysers may flag this as C2 cause of the E2EE. Only the encrypted server public key is publicly available, so the server doesn't look that blank.
 * MITM protection works as following:
-    * First you get the server public key which is encrypted using Fernet with the server access_code so no third-party could tamper with your future communication. If someone does tamper with data being sent, server will detect it and wont respond.
+    * First you get the server public key which is **encrypted using Fernet with the server access_code** so no third-party could tamper with your future communication. If someone does tamper with data being sent, server will detect it and wont respond.
     * After obtaining the server public key, you prove your integrity by decrypting the server public key by access_code entered on the client-side. You than use the public_key to encrypt the authorization process.
-    * The auth works by you hashing "{access_code}{client_ip}" and than encrypting this to the server. Meaning this process is C2S.
+    * The auth works by you **hashing "{access_code}{client_ip}"** and than encrypting this to the server. Meaning **this process is C2S**.
     * After the server responds with "AUTH OK", you send the server your client_public_key which is also encrypted using access_code with Fernet. This also ensures MITM protection.
     * After sending the public_key, you load room details using /rooms endpoint. Server does not store room details in accessible files, but loads the details and responds with encrypted response which you than decrypt.
     * You than select room number. Also C2S. Server responds after checking some details itself, not relying on client-side.
-    * Now you're waiting in chat room. The server is set by default to hold your request for 60s (long poll). If noone requests to join in to your room, you leave the room and are met with the room selection once again. This ensures room rotation. Every request is long polled by default for 60s. 
+    * Now you're waiting in chat room. **The server is set by default to hold your request for 60s (long poll)**. If noone requests to join in to your room, you leave the room and the all logs are cleared. This ensures room rotation. Every request is long polled by default for 60s. **If the time exceeds, client data is deleted and client program is terminated.**
     * If someone does request to join in, they send encrypted request to the server which then decrypts it and executes it if it does meet certain criteria. Execution means sending you an encrypted response to your long poll (meaning real time responses) using your public key.
     * You're met with "y/n" asking whether to allow specific ip to join in. Rejecting leaves you in the room. If you do accept, you send your response to the server and are met with another password, this time it is the room password.
     * The room password should be known only by those, who are using the same room. Using this password, you encrypt your another key so even the server cant tamper with your messages. You send the key and the server then acts as relay server. The other side tries to decrypt the public key by the specific password. If the pub key was decrypted successfully, that means you've created E2EE even the server cant tamper with.
-    * Client code is equipped with MITM detection to warn you, if someting was tampered with.
+    * **Client code is equipped with MITM detection to warn you, if someting was tampered with.**
 ### General info
 * Code is separated into multiple files for better modularity.
 * Leaving the room in process just leaves the logs on the server side RAM. Rejoining was accounted for. 
 * [fail2ban](#ddos-protection-setup) and [docker](#docker-installation) integration is available.
 * Once you authorize your ip, anyone can send as many requests as they'd like from your public ip. The server is E2EE so they wont do any real damage, just maybe cause DDOS.
 
+> ⚠️ **Warning:**
+>  **Make sure to rotate server access_code, which is used to C2S. Ensure length of this access_code to be enough to prevent offline brute forcing (Not a big deal for real time MITM, but if you use the same access_code over and over again, it may cause undetectable MITM for future communications). Every room ensures E2EE by creating yet another password which should be known only by those using that room (Stronly recommended changing the password for every room instance). .**
 
 
 

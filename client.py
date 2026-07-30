@@ -22,7 +22,9 @@ def send_msg(server,msg,other_side_key):
 def load_new_msg(server, room, other_side_ip, private_key,server_key):
     while True:
         data_encrypted = crypto.encrypt(server_key, room)
-        x = rq.post(f"http://{server}/data", data=data_encrypted)
+        try:
+            x = rq.post(f"http://{server}/data", data=data_encrypted)
+        except rq.exceptions.ConnectionError: others.quit_all() #Connection closed, quit
         if x == "X": others.quit_all() #Error msg recieved when data is being deleted. This ensures all threads shut off correctly
         check_timeout(x)
         try:
@@ -174,4 +176,7 @@ def main():
                     others.quit_all()
                     
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except rq.exceptions.ConnectionError:
+        print("Server offline or your IP is banned")

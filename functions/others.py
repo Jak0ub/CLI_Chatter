@@ -27,15 +27,12 @@ def get_safe_input(text): #Get safe input from user (input w/o output)
 def clean_room(room_num, ip1, ip2, communicating_ip, ip_to_room, ip_to_key, keys, rooms, Addresses, access_granted, waiting_for_start, waiting_for_room, waiting_for_key, approved): #Remove all logs about clients
     #Delete all logs in RAM
     for remove_ip in [ip1, ip2]:
-        for var in [communicating_ip, ip_to_room, ip_to_key, access_granted, waiting_for_start, waiting_for_room, waiting_for_key,approved]:
+        if remove_ip in Addresses: Addresses.pop(remove_ip)
+        for var in [communicating_ip, ip_to_room, ip_to_key, access_granted, waiting_for_start, waiting_for_room, waiting_for_key,approved,keys]:
             if remove_ip in var:
                 if type(var) == list:   var.pop(var.index(remove_ip))
                 elif type(var) == dict: var.pop(remove_ip)
-            if remove_ip == ip2: break #Possible for removing details only for one ip in a room
-    for var in [keys, Addresses]:
-        for val in var:
-            if val[0] == ip1 or val[0] == ip2:
-                var.pop(var.index(val))
+        if remove_ip == ip2: break #Possible for removing details only for one ip in a room
     if room_num > 0: rooms[room_num-1] = 0
     return communicating_ip, ip_to_room, ip_to_key, keys, rooms, Addresses, access_granted, waiting_for_start, waiting_for_room, waiting_for_key, approved
 
@@ -46,9 +43,8 @@ def write_report(Addr, banned_ip):
     if banned_ip != []:
         lines = ["Logged IP addresses flagged as potential DDOS threat\n", "Integrate with fail2ban\n", "\n"]
         for ip in banned_ip:
-            for address in Addr:
-                if address[0] == ip:
-                    lines.append(f"{address[0]} -> {address[1]}x packets\n")
+            if ip in Addr:
+                lines.append(f"{ip} -> {Addr[ip]}x packets\n")
         with open("../report.txt", "w") as f: f.writelines(lines)
 
 def get_env():#Only for docker

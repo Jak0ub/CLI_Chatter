@@ -19,15 +19,14 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
     rooms = []
     for i in range(rooms_value):
         rooms.append(0)
-    room_quit = 0
     client_queues = {}
     access_granted = []
-    Addresses = []
+    Addresses = {}
     banned_ip = [] 
     communicating_ip = []
     ip_to_room = {} #Which ip is in which room
     ip_to_key = {} # {127.0.0.1: True} means we have key for 127.0.0.1 ip
-    keys = [] #Public keys of clients
+    keys = {} #Public keys of clients; {IP: key_loaded}
     waiting_for_start = {} #{IP: room}
     waiting_for_room = {} #{IP: room}
     waiting_for_key = [] #Private encrypted keys
@@ -74,14 +73,14 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
                 msg = crypto.base64_encode(msg)
         self.wfile.write(msg)
 
+    def log_info(self, client_ip):
+        if client_ip not in self.Addresses and client_ip not in self.access_granted: (self.Addresses).update({client_ip: 1}) #First ever request
+        elif client_ip not in self.access_granted:
+            self.Addresses[client_ip] += 1
+            if self.Addresses[client_ip] >= self.ddos_protection and client_ip not in self.banned_ip:
+                (self.banned_ip).append(client_ip)
+
     def check_access(self, client_ip, data):
-        if len(self.Addresses) == 0: (self.Addresses).append([client_ip, 0])
-        for adr in self.Addresses:
-            if adr[0] == client_ip: 
-                self.Addresses[(self.Addresses).index(adr)][1] += 1
-                if self.Addresses[(self.Addresses).index(adr)][1] >= self.ddos_protection and client_ip not in self.banned_ip: (self.banned_ip).append(client_ip)
-                break
-            elif adr[0] != client_ip and (self.Addresses).index(adr) == len(self.Addresses)-1: (self.Addresses).append([client_ip, 0]) #Not logged yet
         if client_ip not in self.banned_ip:
             #Access solution
             #If the access_code+OriginIP hashed match the parameter given. The IP has access granted. Just prevention system
@@ -118,19 +117,24 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
         client_ip, client_port = self.client_address
         content_length = int(self.headers.get('Content-Length', 0))
         data = self.rfile.read(content_length)
+        with LOCK: 
+            self.log_info(client_ip)
+            self.loging()
+        if client_ip in self.banned_ip: return
         if path == '/quit' and client_ip in self.communicating_ip:
             try:
                 data_temp = crypto.decrypt(self.private_key, data)
                 data_temp = data_temp.decode()
                 if data_temp.split("\n")[0].split(": ")[0] == "quit" and f"{self.ip_to_room[client_ip]}" == data_temp.split("\n")[0].split(": ")[1]:
-                    self.remove_logs(client_ip)
+                    room_num = self.ip_to_room[client_ip]
+                    with LOCK: self.remove_logs(client_ip) #Safely remove logs
                     self.respond(200, "OK", False)
             except:
                 self.respond(200, "X", False)
 
         if path == '/key' and client_ip in self.access_granted:
             if client_ip in self.communicating_ip and client_ip in self.waiting_for_key: #Relay key, client will check
-                with LOCK:
+                with LOCK: #Safe key exchange process
                     (self.waiting_for_key).pop((self.waiting_for_key).index(client_ip))
                     room_num = self.ip_to_room[client_ip]
                     other_side = next(k for k, v in (self.ip_to_room).items() if v == room_num and k != client_ip)
@@ -145,17 +149,16 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
                 try:
                     key = crypto.retrieve_key(data, self.access_code)
                     #If key for this ip was not saved, save it
-                    if self.keys == []: (self.keys).append([client_ip, key]); self.ip_to_key[client_ip] = True
-                    for values in self.keys:
-                        if values[0] == client_ip: values[1] = key
-                        if values[0] != client_ip and (self.keys).index(values) == len(self.keys)-1: (self.keys).append([client_ip, key]); self.ip_to_key[client_ip] = True
+                    with LOCK:
+                        if self.keys == {}: (self.keys).update({client_ip: key}); self.ip_to_key[client_ip] = True
+                        (self.keys).update({client_ip: key})
+                        self.ip_to_key[client_ip] = True
                     self.respond(200, "OK",False)
                 except: self.respond(200, "X",False)
 
         elif path == '/rooms' and client_ip in self.access_granted:
             #Decode the key and make it usable
-            for values in self.keys:
-                if values[0] == client_ip: pub_key_client = values[1]
+            pub_key_client = self.keys[client_ip]
             lines = []
             for room in self.rooms:
                 lines.append(f"{len(lines)+1} -> {room}/2")
@@ -184,10 +187,9 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
                 if data_temp.split("\n")[0].split(": ")[0] == "auth":
                     with LOCK: #Safe editing variables
                         self.check_access(client_ip, data_temp)
-                        self.loging()
-
             except: 
                 if client_ip not in self.communicating_ip:self.respond(200, "X",False)
+
             if client_ip in self.access_granted and data != data_temp: #Data was decrypted, meaning it was intended for server to see
                 data_lines = data_temp.split("\n")
                 try: data_line_1 = data_lines[1]    
@@ -213,8 +215,7 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
                                     self.rooms[self.ip_to_room[client_ip]-1] -= 1
                                     self.ip_to_room[client_ip] = 0
                                 other_side = next(k for k, v in (self.ip_to_room).items() if v == room_num)
-                                for value in self.keys: 
-                                    if value[0] == other_side: pub_key_client = value[1]
+                                pub_key_client = self.keys[other_side]
                                 (self.waiting_for_room).update({client_ip: room_num})
                             self._notify(other_side,crypto.encrypt(pub_key_client, f"{client_ip}"),1)
                             self._handle_wait(client_ip) #Waiting for response to the request
@@ -222,19 +223,18 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
                         elif self.ip_to_room[client_ip] != 0 and self.rooms[self.ip_to_room[client_ip]-1] == 1 and data_line_1.split(": ")[1] in ["y", "n"]:#If the ip is in this room and is the only one
                             other_side = data_lines[1].split(": ")[0]
                             try: 
-                                value = self.waiting_for_room[other_side] == self.ip_to_room[client_ip]
                                 if self.waiting_for_room[other_side] == self.ip_to_room[client_ip]:
                                     if data_lines[1].split(": ")[1] == "y": #Approved
-                                        for value in self.keys: 
-                                            if value[0] == other_side: pub_key_client = value[1]
+                                        pub_key_client = self.keys[other_side]
                                         self._notify(other_side,crypto.encrypt(pub_key_client, f"y,{client_ip}"),1)
-                                        (self.waiting_for_start).update({other_side: self.ip_to_room[client_ip]})
-                                        (self.approved).update({other_side: room_num})
+                                        with LOCK:
+                                            (self.waiting_for_start).update({other_side: self.ip_to_room[client_ip]})
+                                            (self.approved).update({other_side: room_num})
                                         self._handle_wait(client_ip)
                                     else: #Rejected
-                                        for value in self.keys: 
-                                            if value[0] == other_side: pub_key_client = value[1]
-                                        (self.waiting_for_room).pop(other_side)
+                                        pub_key_client = self.keys[other_side]
+                                        with LOCK:
+                                            (self.waiting_for_room).pop(other_side)
                                         self._notify(other_side,crypto.encrypt(pub_key_client, f"n"),1)
                                         self._handle_wait(client_ip)
                             except KeyError: self.respond(200, "X",False)
@@ -245,44 +245,32 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
                                     other_side = next(k for k, v in (self.ip_to_room).items() if v == room_num)
                                     for ip in [client_ip, other_side]:
                                         (self.waiting_for_room).pop(ip)
-                                    self.ip_to_room[client_ip] = room_num
+                                    with LOCK:
+                                        self.ip_to_room[client_ip] = room_num
                                     if self.rooms[room_num-1] == 1 and client_ip in self.approved and self.approved[client_ip] == room_num:
-                                        for value in self.keys: 
-                                            if value[0] == other_side: pub_key_client = value[1]
+                                        pub_key_client = self.keys[other_side]
                                         #Update data
-                                        (self.approved).pop(client_ip)
-                                        self.rooms[room_num-1] = 2
-                                        for ip in [client_ip, other_side]:
-                                            (self.communicating_ip).append(ip)
-                                            (self.waiting_for_key).append(ip)
-                                        (self.waiting_for_start).pop(client_ip)
+                                        with LOCK:
+                                            (self.approved).pop(client_ip)
+                                            self.rooms[room_num-1] = 2
+                                            for ip in [client_ip, other_side]:
+                                                (self.communicating_ip).append(ip)
+                                                (self.waiting_for_key).append(ip)
+                                            (self.waiting_for_start).pop(client_ip)
                                         self._notify(other_side,crypto.encrypt(pub_key_client, "start"),1)
                                         self._handle_wait(client_ip)
                                         
                         elif self.rooms[room_num-1] == 2: #If the request is nonsense
-                            for value in self.keys: 
-                                if value[0] == client_ip: pub_key_client = value[1]
+                            pub_key_client = self.keys[client_ip]
                             self.respond(200, crypto.encrypt(pub_key_client, "FULL"),False)
 
-                elif data_lines[0].split(": ")[0] == "quit":
-                    try:
-                        if client_ip in self.communicating_ip and int(data_lines[0].split(": ")[1]) == self.ip_to_room[client_ip]:
-                            self.remove_logs(client_ip)
-                            self.respond(200, "OK", False)
-                    except: self.respond(200, "X", False)
 
 
     def do_GET(self):
         client_ip, client_port = self.client_address
-        if client_ip not in self.access_granted: #If IP wasnt authorized, log this request.
-            if len(self.Addresses) == 0: (self.Addresses).append([client_ip, 0])
-            for adr in self.Addresses:
-                if adr[0] == client_ip: 
-                    self.Addresses[(self.Addresses).index(adr)][1] += 1
-                    if self.Addresses[(self.Addresses).index(adr)][1] >= self.ddos_protection and client_ip not in self.banned_ip: (self.banned_ip).append(client_ip)
-                    break
-                elif adr[0] != client_ip and (self.Addresses).index(adr) == len(self.Addresses)-1: (self.Addresses).append([client_ip, 0]) #Not logged yet
-        super().do_GET()
+        self.log_info(client_ip)
+        if client_ip not in self.banned_ip:
+            super().do_GET()
 
 def main():
     others.check() #Check supported OS
