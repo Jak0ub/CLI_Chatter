@@ -1,23 +1,25 @@
 # CLI_Chatter (Docker and DDoS solution provided)
 ### How does it work?
 
-* Server runs as "python -m http.server"(shown in images below), so no network scan can suggest real intent (Chatting app).
-* MITM protection is unbreakable if you have strong access_code. Here's why:
-    * First you send **access_code** to the server to verify that you're authorized.
-    * By default **you have 5 attempts**, but you can lower that down with [fail2ban integration](#ddos-protection-setup).
-    * You do send the access code hashed in this way: **"{access_code}{public_ip}"**, so replay attacks outside of LAN wont work. Considering MITM on LAN, one can't do nothing without the access_code, the only thing they can do is DDOS your server.
-    * After selecting room number you want to chat in, you retrieve the server public_key, which is encrypted using **Fernet encryption**. Before the server encrypts the key, it cuts down the first and last line.
-    * The client retrieves the key. Thanks to the Errors raised when the output of decrypting the encrypted server public_key doesn't match the token, **we can rule out the MITM possibility**. 
-    * As described about the server public_key, the server/client does the same for the client public_key.
-    * The only way to break this model is bruteforcing the hash if your IP is known. So **ensure having strong access code.**
-* Every request is sent via url parameters. Nothing stays unencrypted. 
-* When you join the room, you wait for the other side. This is the entire process:
-    * You send the get request to join the room. **Tampering with client side source code is solved** by implicit checks on the server side. Fx. If you request to join room with 2 clients, the request will be dropped.
-    * When the room state is at 0 clients, you wait and poll every 10s to check, if someone has requested to join in.
-    * This process is not E2EE. The other side requests to join in by encrypting the room number with server public key. The server then decrypts the room number and encrypts message for you with the specific IP requesting to join in.
-    * If you allow the other side to join in, the server than sends clients public keys to each other to ensure E2EE. Then the chatting can start!
-* Every request sent is being deleted after total of 100 requests sent to the server. After using /quit to exit the chats, the server deletes all information about you and the other side.
+* Server runs as Simple HTTP Server(shown in images below), so no cheap network scan can suggest real intent (Chatting app). Only the encrypted server public key is publicly available, so the server doesn't look that blank.
+* MITM protection works as following:
+    * First you get the server public key which is encrypted using Fernet with the server access_code so no third-party could tamper with your future communication. If someone does tamper with data being sent, server will detect it and wont respond.
+    * After obtaining the server public key, you prove your integrity by decrypting the server public key by access_code entered on the client-side. You than use the public_key to encrypt the authorization process.
+    * The auth works by you hashing "{access_code}{client_ip}" and than encrypting this to the server. Meaning this process is C2S.
+    * After the server responds with "AUTH OK", you send the server your client_public_key which is also encrypted using access_code with Fernet. This also ensures MITM protection.
+    * After sending the public_key, you load room details using /rooms endpoint. Server does not store room details in accessible files, but loads the details and responds with encrypted response which you than decrypt.
+    * You than select room number. Also C2S. Server responds after checking some details itself, not relying on client-side.
+    * Now you're waiting in chat room. The server is set by default to hold your request for 60s (long poll). If noone requests to join in to your room, you leave the room and are met with the room selection once again. This ensures room rotation. Every request is long polled by default for 60s. 
+    * If someone does request to join in, they send encrypted request to the server which then decrypts it and executes it if it does meet certain criteria. Execution means sending you an encrypted response to your long poll (meaning real time responses) using your public key.
+    * You're met with "y/n" asking whether to allow specific ip to join in. Rejecting leaves you in the room. If you do accept, you send your response to the server and are met with another password, this time it is the room password.
+    * The room password should be known only by those, who are using the same room. Using this password, you encrypt your another key so even the server cant tamper with your messages. You send the key and the server then acts as relay server. The other side tries to decrypt the public key by the specific password. If the pub key was decrypted successfully, that means you've created E2EE even the server cant tamper with.
+    * Client code is equipped with MITM detection to warn you, if someting was tampered with.
+### General info
 * Code is separated into multiple files for better modularity.
+* Leaving the room in process just leaves the logs on the server side RAM. Rejoining was accounted for. 
+* [fail2ban](#ddos-protection-setup) and [docker](#docker-installation) integration is available.
+* Once you authorize your ip, anyone can send as many requests as they'd like from your public ip. The server is E2EE so they wont do any real damage, just maybe cause DDOS.
+
 
 
 
@@ -38,23 +40,26 @@
 ## Important Notes
 
 * Server is only for UNIX, client is for all platforms.
-* Works only on WAN. Avoid using LAN. 2 clients using the same public IP abd knowing the access_Code at the same time is going to crash both clients. **If you want to chat across LAN, use different tool.** *`Be careful about who you give your server access code to!`*
-* If client leaves using ^C after joining a room and waiting there, the client can't enter the same room (The client MUST enter a new one to become legitimate client once again)
-* No group chats.
-* **Try to AVOID ^C AT ANY COSTS**
+* Clients are represented by IP addr. Avoid 2 clients from the same IP at the same time.
 * If some IP addr. exceeds the **ddos_protection** var limit, than the program stores the IP addr. into `report.txt` permanently to your dir. **Should be used with fail2ban.**
 * Change **port** var to any port you'd like to avoid bots.
 * You can also change after how many packets the logs will be erased and `report.txt` saved. **(Not for docker)**
-* **READ THE FOLLOWING WARNINGS!**
+* **READ THE FOLLOWING WARNING!**
 
-> ⚠️ **Warning:**
->  Do not share your access_code with everyone. The server uses `ast.literal_eval()` so APT could abuse this function for DoS purposes when access_code is publicly known. The exploit is hard to replicate, but not impossible. The exploit could only shut down your server-side system so no RCE etc.
 
 > ⚠️ **Warning:**
 >  After using `/quit` your terminal might stop working as intended. If you encounter this type of error, use `reset` command (for Unix)
 
-
 # Installation
+
+```
+git clone https://github.com/Jak0ub/Cli_Chatter
+cd Cli_chatter
+pip install -r req.txt
+python client.py
+```
+
+# Docker installation
 
 **`report.txt` will be now saved to your current dir as `report_from_docker.txt`. The file WILL be overwritten after restarting the docker.**
 
@@ -65,7 +70,7 @@ cd /tmp
 curl -L "https://raw.githubusercontent.com/jak0ub/CLI_Chatter/main/Dockerfile" -o Dockerfile
 curl -L "https://raw.githubusercontent.com/jak0ub/CLI_Chatter/main/docker-compose.yml" -o docker-compose.yml
 touch report_from_docker.txt
-chmod 777 report_from_docker.txt
+chmod 666 report_from_docker.txt
 ```
 ### **EDIT THE `docker-compose.yml` PASSWORD, PORT and PACKET_LIMIT**
 

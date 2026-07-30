@@ -1,40 +1,26 @@
 from functions import crypto, others
+import os, threading
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse
+import queue, time
 
-def decode(params, query, key):
-    answer = crypto.base64_decode(params.split(f"{query}=")[1].split(" ")[0]) #Get request from authorized client
-    answer = crypto.str_to_bytes(answer)#Str to bytes
-    return crypto.decrypt(key,answer) #Decrypt text from client using private key
+LOCK = threading.Lock()
+message_queue = queue.Queue()
 
-def retrieve_key(params, access_code):
-    key = params.split("key=")[1].split(" ")[0]
-    key = crypto.str_to_bytes(key)
-    key = crypto.decrypt_using_passwd(key, access_code)
-    key = key.split("\n")
-    key.insert(0, "-----BEGIN PUBLIC KEY-----")
-    key.append("-----END PUBLIC KEY-----")
-    key = "\n".join(key)
-    key = key.encode("ascii")
-    return crypto.load_pub_key(key)
-
-def main():
-    port = 9001
-
-    others.check()
-    server = others.init(port)
-    others.wait(1) #Ensure clear terminal
-    clear_cmd = others.os_def()
-    others.clear(clear_cmd)
+class ThreadedHandler(SimpleHTTPRequestHandler):
+    #Creating needed files
+    os.system("mkdir hosting")
+    os.chdir("hosting")
+    rooms_value, access_code, ddos_protection = others.get_env()
     private_key, public_key = crypto.generate_keys()
-    rooms, access_code, ddos_protection = others.get_env()
     if access_code == None: access_code = others.get_safe_input("Create password for server access: ")
     crypto.save_pub_key(public_key, "key", access_code)
-    if rooms == None: rooms = int(input("Enter how many chat rooms you'd like: "))
-    rooms = others.create_rooms(rooms)
-    others.clear(clear_cmd)
-    print("Server is running")
-
+    if rooms_value == None: rooms_value = int(input("Enter how many chat rooms you'd like: "))
+    rooms = []
+    for i in range(rooms_value):
+        rooms.append(0)
     room_quit = 0
-    resolved = 0 #Number of requests resolved already
+    client_queues = {}
     access_granted = []
     Addresses = []
     banned_ip = [] 
@@ -42,139 +28,273 @@ def main():
     ip_to_room = {} #Which ip is in which room
     ip_to_key = {} # {127.0.0.1: True} means we have key for 127.0.0.1 ip
     keys = [] #Public keys of clients
+    waiting_for_start = {} #{IP: room}
+    waiting_for_room = {} #{IP: room}
+    waiting_for_key = [] #Private encrypted keys
+    approved = {} #{IP: room}
+    time_between_reports = 60 #How much seconds does the program wait till it writes report
+    start_time = time.time()
 
+    def _notify(self,client_id,body,mode):
+        q = self._get_queue(client_id)
+        if mode == 1: #Normal handshake mode
+            if body in ["OK", "X", "AUTH OK"]:
+                body = body.encode()
+            else:
+                body = crypto.base64_encode(body)
+        q.put(body)
 
-    while True:
-        others.wait(0.1)
-        with open("../log.txt", "r") as f: lines = f.readlines()
-        lines = lines[(resolved):]#exclude the lines already resolved
-        if resolved > 100: #After 100 packets. Delete logs and write a report of banned IP addr. CHANGE THIS NUMBER IF NEEDED!
-            others.write_report(Addresses, banned_ip) #Write a report of banned IP addr. if needed. 
-            with open("../log.txt", "w") as f: f.write(""); resolved = 0#Clear logs
+    def _get_queue(self, client_id):
+        with LOCK:
+            if client_id not in self.client_queues:
+                self.client_queues[client_id] = queue.Queue()
+            return self.client_queues[client_id]
 
-        for line in lines: #Resolving requests
-            ip, params = others.info(line)
-            #Packet counter. DDOS PROTECTION
-            if ip not in access_granted:
-                if len(Addresses) == 0: Addresses.append([ip, 0])
-                for adr in Addresses:
-                    if adr[0] == ip: 
-                        Addresses[Addresses.index(adr)][1] += 1
-                        if Addresses[Addresses.index(adr)][1] >= ddos_protection and ip not in banned_ip: banned_ip.append(ip)
-                        break
-                    elif adr[0] != ip and Addresses.index(adr) == len(Addresses)-1: Addresses.append([ip, 0]) #Not logged yet
-                if ip in banned_ip: continue
-                #Access solution
-                #If the access_code+OriginIP hashed match the parameter given. The IP has access granted. Just prevention system
-                access_code_for_this_ip = f"{access_code}{ip}"
-                hashed_access_code_for_this_ip = crypto.hash_text(access_code_for_this_ip)
-                if params != "":
-                    if params.split("=")[0].lower() == "code" and params.split("code=")[1].split(" ")[0] == hashed_access_code_for_this_ip:
-                        access_granted.append(ip)
-                        others.save_authorized_ip(crypto.hash_text(str(ip)))
-                        ip_to_room.update({ip: 0}) #Default room 0
-                        ip_to_key.update({ip: False}) #No key for this IP yet
+    def _handle_wait(self, client_id):
+        q = self._get_queue(client_id)
+        try:
+            data = q.get(timeout=60)
+            self.respond(200, data,True)
+        except queue.Empty:
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.end_headers()
+            with LOCK: #Remove details about client
+                self.remove_logs(client_id)
+            self.wfile.write(b"TIMEOUT")
+
+    def respond(self, code, msg,handler):
+        self.send_response(code)
+        self.send_header('Content-Type', 'text/plain')
+        self.end_headers()
+        if handler == False: #Not called through handler, parse normally
+            if msg in ["OK", "X", "AUTH OK"]:
+                msg = msg.encode()
+            else:
+                msg = crypto.base64_encode(msg)
+        self.wfile.write(msg)
+
+    def check_access(self, client_ip, data):
+        if len(self.Addresses) == 0: (self.Addresses).append([client_ip, 0])
+        for adr in self.Addresses:
+            if adr[0] == client_ip: 
+                self.Addresses[(self.Addresses).index(adr)][1] += 1
+                if self.Addresses[(self.Addresses).index(adr)][1] >= self.ddos_protection and client_ip not in self.banned_ip: (self.banned_ip).append(client_ip)
+                break
+            elif adr[0] != client_ip and (self.Addresses).index(adr) == len(self.Addresses)-1: (self.Addresses).append([client_ip, 0]) #Not logged yet
+        if client_ip not in self.banned_ip:
+            #Access solution
+            #If the access_code+OriginIP hashed match the parameter given. The IP has access granted. Just prevention system
+            access_code_for_this_ip = f"{self.access_code}{client_ip}"
+            hashed_access_code_for_this_ip = crypto.hash_text(access_code_for_this_ip)
+            if data.split("\n")[0].split(": ")[0] == "auth":
+                if data.split("\n")[0].split(": ")[1] == hashed_access_code_for_this_ip:
+                    if client_ip in self.ip_to_room:
+                        self.remove_logs(client_ip) #Restart variables for this IP.
+                    (self.access_granted).append(client_ip)
+                    (self.ip_to_room).update({client_ip: 0}) #Default room 0
+                    (self.ip_to_key).update({client_ip: False}) #No key for this IP yet
+                    self.respond(200, "AUTH OK",False)
+
+    def remove_logs(self, client_ip):
+        #Get needed info about both sides
+        if client_ip in self.communicating_ip:
+            room_quit = self.ip_to_room[client_ip]
+        else: room_quit = self.ip_to_room[client_ip]
+        #Delete all logs about clients
+        self.communicating_ip, self.ip_to_room, self.ip_to_key, self.keys, self.rooms, self.Addresses, self.access_granted, self.waiting_for_start, self.waiting_for_room, self.waiting_for_key, self.approved = others.clean_room(
+            room_quit, client_ip, client_ip, self.communicating_ip, self.ip_to_room, self.ip_to_key, self.keys, self.rooms, self.Addresses,
+            self.access_granted, self.waiting_for_start, self.waiting_for_room, self.waiting_for_key, self.approved
+        )
+
+    def loging(self):
+        if (time.time() - self.start_time) > self.time_between_reports:
+            self.start_time = time.time
+            others.write_report(self.Addresses, self.banned_ip)
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        path = parsed.path
+        client_ip, client_port = self.client_address
+        content_length = int(self.headers.get('Content-Length', 0))
+        data = self.rfile.read(content_length)
+        if path == '/quit' and client_ip in self.communicating_ip:
+            try:
+                data_temp = crypto.decrypt(self.private_key, data)
+                data_temp = data_temp.decode()
+                if data_temp.split("\n")[0].split(": ")[0] == "quit" and f"{self.ip_to_room[client_ip]}" == data_temp.split("\n")[0].split(": ")[1]:
+                    self.remove_logs(client_ip)
+                    self.respond(200, "OK", False)
+            except:
+                self.respond(200, "X", False)
+
+        if path == '/key' and client_ip in self.access_granted:
+            if client_ip in self.communicating_ip and client_ip in self.waiting_for_key: #Relay key, client will check
+                with LOCK:
+                    (self.waiting_for_key).pop((self.waiting_for_key).index(client_ip))
+                    room_num = self.ip_to_room[client_ip]
+                    other_side = next(k for k, v in (self.ip_to_room).items() if v == room_num and k != client_ip)
+                self._notify(other_side,data,0)
+                if other_side in self.waiting_for_key:
+                    self._handle_wait(client_ip) #Waiting for the key
+                else:
+                    self.respond(200, "OK", False)
 
             else:
-                if params != "":
-                    if params.split("=")[0].lower() == "room":
-                        try: room_num =  decode(params, "room", private_key)
-                        except: continue 
-                        #Convert to int to ensure the decryption was errorless
-                        try: room_num = int(room_num)
-                        except ValueError: pass
-                        if type(room_num) == int:
-                            #Ensure no IndexError occurs
-                            if room_num <= len(rooms) and room_num > 0:
-                                if rooms[room_num-1] == 0 and ip_to_room[ip] != room_num: #If the room is not full and current ip is not in this room
-                                    if ip_to_room[ip] != 0:
-                                        rooms[ip_to_room[ip]-1] -= 1
-                                        with open(f"{ip_to_room[ip]}.txt", "w") as f: f.write(f"{rooms[ip_to_room[ip]-1]}\n")#Leave the previous room
-                                    rooms[room_num-1] += 1
-                                    ip_to_room[ip] = room_num
-                                    #Join new room
-                                    with open(f"{room_num}.txt", "w") as f: f.write(f"{rooms[room_num-1]}\n") #Write status to the file
-                                elif rooms[room_num-1] == 1 and ip_to_room[ip] != room_num: #Ask the other side for approval to join
-                                    if ip_to_room[ip] != 0:
-                                        rooms[ip_to_room[ip]-1] -= 1
-                                        with open(f"{ip_to_room[ip]}.txt", "w") as f: f.write(f"{rooms[ip_to_room[ip]-1]}\n")#Leave the previous room
-                                        ip_to_room[ip] = 0
-                                    other_side = next(k for k, v in ip_to_room.items() if v == room_num)
-                                    if ip_to_key[other_side] == True: #Key obtained. E2EE available
-                                        for value in keys: 
-                                            if value[0] == other_side: pub_key_client = value[1]
-                                        with open(f"{room_num}.txt", "w") as f: f.writelines(["1\n", f"{crypto.encrypt(pub_key_client, f'{ip}')}"])
-  
-                    elif params.split("=")[0].lower() == "key":
-                        #Decode the key and make it usable
-                        try: key = retrieve_key(params, access_code)
-                        except: continue
-                        #If key for this ip was not saved, save it
-                        if keys == []: keys.append([ip, key]); ip_to_key[ip] = True
-                        for values in keys:
-                            if values[0] == ip: values[1] = key
-                            if values[0] != ip and keys.index(values) == len(keys)-1: keys.append([ip, key]); ip_to_key[ip] = True
+                #Decode the key and make it usable
+                try:
+                    key = crypto.retrieve_key(data, self.access_code)
+                    #If key for this ip was not saved, save it
+                    if self.keys == []: (self.keys).append([client_ip, key]); self.ip_to_key[client_ip] = True
+                    for values in self.keys:
+                        if values[0] == client_ip: values[1] = key
+                        if values[0] != client_ip and (self.keys).index(values) == len(self.keys)-1: (self.keys).append([client_ip, key]); self.ip_to_key[client_ip] = True
+                    self.respond(200, "OK",False)
+                except: self.respond(200, "X",False)
 
-                    elif params.split("=")[0].lower() == "respond":
-                        #Get respond msg from client 1 and acknowledge the other side with specific IP specified by responder side
-                        if ip_to_room[ip] == 0: continue #Prevent errors if the respond msg was sent by unauthorized person
-                        if rooms[ip_to_room[ip]-1] == 1:
-                            try: 
-                                msg = decode(params, "respond", private_key)
-                                ip_to_room[msg.decode("utf-8")] = ip_to_room[ip] #Convert reciever to specific room
-                            except: continue
-                            for value in keys: 
-                                if value[0] == msg.decode("utf-8"): pub_key_client = value[1]  
-                            with open(f"{ip_to_room[ip]}.txt", "w") as f: f.writelines(["1\n", f"""{crypto.encrypt(pub_key_client, f'{msg.decode("utf-8")}')}"""])
+        elif path == '/rooms' and client_ip in self.access_granted:
+            #Decode the key and make it usable
+            for values in self.keys:
+                if values[0] == client_ip: pub_key_client = values[1]
+            lines = []
+            for room in self.rooms:
+                lines.append(f"{len(lines)+1} -> {room}/2")
+            self.respond(200, crypto.encrypt(pub_key_client, "\n".join(lines)),False)
+
+        elif path == '/data':
+            if client_ip in self.communicating_ip:#Relay messagess
+                try:
+                    data_temp = crypto.decrypt(self.private_key, data)
+                    data_temp = data_temp.decode()
+                    room_num = self.ip_to_room[client_ip]
+                    other_side = next(k for k, v in (self.ip_to_room).items() if v == room_num and k != client_ip)
+                    if int(data_temp.split("\n")[0]) == self.ip_to_room[client_ip]: #Long poll the request, because this was message recieving request
+                        self._handle_wait(client_ip)
+                except:
+                    room_num = self.ip_to_room[client_ip]
+                    other_side = next(k for k, v in (self.ip_to_room).items() if v == room_num and k != client_ip)
+                    if other_side not in self.waiting_for_key and client_ip not in self.waiting_for_key: #Chat is legit
+                        self._notify(other_side, data, 0)
+                        self.respond(200,"OK",False)
                     
-                    elif params.split("=")[0].lower() == "start":
-                        try:
-                            for val in ip_to_room:
-                                if ip_to_room[val] == ip_to_room[ip] and rooms[ip_to_room[ip]-1] == 1 and val != ip: #Room was not yet updated and this is valid response to start chatting
-                                    rooms[ip_to_room[ip]-1] += 1
-                                    other_side = val
-                                    with open(f"{ip_to_room[ip]}.txt", "w") as f: f.writelines(["2\n", "\n", "\n"]) #Prepare file for two way communication
-                                    #Append both IP for future communication
-                                    communicating_ip.append(ip)  #The requester IP is 1st
-                                    communicating_ip.append(val) #Origin IP is 2nd
-                                    break
-                        except: continue #Not valid request? Skip this packet
-                        #Save client-side pub keys
-                        for key in keys:
-                            if key[0] == ip:
-                                side1_key = key[1]
-                            elif key[0] == val:
-                                side2_key = key[1]
-                        others.create_room_share(ip_to_room[ip], side1_key, side2_key, access_code)
+            try: #Enable relogin after not fully closed session
+                data_temp = data
+                data_temp = crypto.decrypt(self.private_key, data_temp)
+                data_temp = data_temp.decode()
+                if data_temp.split("\n")[0].split(": ")[0] == "auth":
+                    with LOCK: #Safe editing variables
+                        self.check_access(client_ip, data_temp)
+                        self.loging()
+
+            except: 
+                if client_ip not in self.communicating_ip:self.respond(200, "X",False)
+            if client_ip in self.access_granted and data != data_temp: #Data was decrypted, meaning it was intended for server to see
+                data_lines = data_temp.split("\n")
+                try: data_line_1 = data_lines[1]    
+                except: data_line_1 = "" 
+
+                if data_lines[0].split(": ")[0] == "room" and client_ip not in self.communicating_ip:
+                    try: room_num =  int(data_lines[0].split(": ")[1])
+                    except ValueError: self.respond(200, "X",False); room_num = 0
+                    if room_num != 0:
+                        if self.rooms[room_num-1] == 0 and self.ip_to_room[client_ip] != room_num: #If the room is not full and current ip is not in this room
+                            with LOCK:
+                                if self.ip_to_room[client_ip] != 0: #Leave the previous room
+                                    self.rooms[self.ip_to_room[client_ip]-1] -= 1
+                                self.rooms[room_num-1] += 1
+                                self.ip_to_room[client_ip] = room_num
+                                #Join new room
+                                (self.waiting_for_room).update({client_ip: room_num})
+                            self._handle_wait(client_ip) #Waiting for requests to join in
+
+                        elif self.rooms[room_num-1] == 1 and self.ip_to_room[client_ip] != room_num and data_line_1 != "start": #Ask the other side for approval to join
+                            with LOCK:
+                                if self.ip_to_room[client_ip] != 0: #Leave the previous room
+                                    self.rooms[self.ip_to_room[client_ip]-1] -= 1
+                                    self.ip_to_room[client_ip] = 0
+                                other_side = next(k for k, v in (self.ip_to_room).items() if v == room_num)
+                                for value in self.keys: 
+                                    if value[0] == other_side: pub_key_client = value[1]
+                                (self.waiting_for_room).update({client_ip: room_num})
+                            self._notify(other_side,crypto.encrypt(pub_key_client, f"{client_ip}"),1)
+                            self._handle_wait(client_ip) #Waiting for response to the request
                         
+                        elif self.ip_to_room[client_ip] != 0 and self.rooms[self.ip_to_room[client_ip]-1] == 1 and data_line_1.split(": ")[1] in ["y", "n"]:#If the ip is in this room and is the only one
+                            other_side = data_lines[1].split(": ")[0]
+                            try: 
+                                value = self.waiting_for_room[other_side] == self.ip_to_room[client_ip]
+                                if self.waiting_for_room[other_side] == self.ip_to_room[client_ip]:
+                                    if data_lines[1].split(": ")[1] == "y": #Approved
+                                        for value in self.keys: 
+                                            if value[0] == other_side: pub_key_client = value[1]
+                                        self._notify(other_side,crypto.encrypt(pub_key_client, f"y,{client_ip}"),1)
+                                        (self.waiting_for_start).update({other_side: self.ip_to_room[client_ip]})
+                                        (self.approved).update({other_side: room_num})
+                                        self._handle_wait(client_ip)
+                                    else: #Rejected
+                                        for value in self.keys: 
+                                            if value[0] == other_side: pub_key_client = value[1]
+                                        (self.waiting_for_room).pop(other_side)
+                                        self._notify(other_side,crypto.encrypt(pub_key_client, f"n"),1)
+                                        self._handle_wait(client_ip)
+                            except KeyError: self.respond(200, "X",False)
+                            
+                        elif client_ip in self.waiting_for_start: #Last step of handshake
+                            if room_num <= len(self.rooms) and room_num > 0: 
+                                if data_line_1 == "start" and client_ip in self.waiting_for_start:
+                                    other_side = next(k for k, v in (self.ip_to_room).items() if v == room_num)
+                                    for ip in [client_ip, other_side]:
+                                        (self.waiting_for_room).pop(ip)
+                                    self.ip_to_room[client_ip] = room_num
+                                    if self.rooms[room_num-1] == 1 and client_ip in self.approved and self.approved[client_ip] == room_num:
+                                        for value in self.keys: 
+                                            if value[0] == other_side: pub_key_client = value[1]
+                                        #Update data
+                                        (self.approved).pop(client_ip)
+                                        self.rooms[room_num-1] = 2
+                                        for ip in [client_ip, other_side]:
+                                            (self.communicating_ip).append(ip)
+                                            (self.waiting_for_key).append(ip)
+                                        (self.waiting_for_start).pop(client_ip)
+                                        self._notify(other_side,crypto.encrypt(pub_key_client, "start"),1)
+                                        self._handle_wait(client_ip)
+                                        
+                        elif self.rooms[room_num-1] == 2: #If the request is nonsense
+                            for value in self.keys: 
+                                if value[0] == client_ip: pub_key_client = value[1]
+                            self.respond(200, crypto.encrypt(pub_key_client, "FULL"),False)
 
-                    elif params.split("=")[0].lower() == "msg":
-                        if ip in communicating_ip:
-                            try:
-                                msg = crypto.base64_decode(params.split(f"msg=")[1].split(" ")[0]) #Base64 decode encrypted msg
-                                msg = crypto.str_to_bytes(msg)#Str to bytes
-                                with open(f"{ip_to_room[ip]}.txt", "r") as f: l = f.readlines() #Load room data to change only specific line
-                                other_side = others.get_other_side(ip_to_room, ip)
-                                l[(communicating_ip.index(ip)%2)+1] = f"{msg}\n" #Save msg
-                                with open(f"{ip_to_room[ip]}.txt", "w")as f: f.writelines(l) #Save changes
-                            except: continue #Not valid request? Skip
-                    
-                    elif params.split("=")[0].lower() == "quit":
-                        try:
-                            #Get needed info about both sides
-                            if ip in communicating_ip:
-                                other_side = others.get_other_side(ip_to_room, ip)
-                                room_quit = ip_to_room[ip]
-                            #Delete all logs about clients
-                            communicating_ip, ip_to_room, ip_to_key, keys, rooms, Addresses, access_granted = others.clean_room(room_quit, ip, other_side, communicating_ip, ip_to_room, ip_to_key, keys, rooms, Addresses, access_granted)
-                        except: continue
-        resolved += len(lines)
+                elif data_lines[0].split(": ")[0] == "quit":
+                    try:
+                        if client_ip in self.communicating_ip and int(data_lines[0].split(": ")[1]) == self.ip_to_room[client_ip]:
+                            self.remove_logs(client_ip)
+                            self.respond(200, "OK", False)
+                    except: self.respond(200, "X", False)
 
-    #todo
-    if others.clean(server) == 1:
-        print("server stopped successfully")
-    else:
-        print("error occured")
+
+    def do_GET(self):
+        client_ip, client_port = self.client_address
+        if client_ip not in self.access_granted: #If IP wasnt authorized, log this request.
+            if len(self.Addresses) == 0: (self.Addresses).append([client_ip, 0])
+            for adr in self.Addresses:
+                if adr[0] == client_ip: 
+                    self.Addresses[(self.Addresses).index(adr)][1] += 1
+                    if self.Addresses[(self.Addresses).index(adr)][1] >= self.ddos_protection and client_ip not in self.banned_ip: (self.banned_ip).append(client_ip)
+                    break
+                elif adr[0] != client_ip and (self.Addresses).index(adr) == len(self.Addresses)-1: (self.Addresses).append([client_ip, 0]) #Not logged yet
+        super().do_GET()
+
+def main():
+    others.check() #Check supported OS
+    #Ensure clear terminal
+    time.sleep(1)
+    clear_cmd = others.os_def()
+    others.clear(clear_cmd)
+    #Start server
+    port = 9001
+    server = ThreadingHTTPServer(('', port), ThreadedHandler)
+    print("server is running...")
+    server.serve_forever()                
 
 if __name__ == "__main__":
     main()
