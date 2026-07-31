@@ -108,7 +108,7 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
             self.access_granted, self.waiting_for_start, self.waiting_for_room, self.waiting_for_key, self.approved, self.client_queues
         )
 
-    def loging(self):
+    def logging(self):
         if (time.time() - self.start_time) > self.time_between_reports:
             self.start_time = time.time()
             others.write_report(self.Addresses, self.banned_ip)
@@ -121,7 +121,7 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
         data = self.rfile.read(content_length)
         with LOCK: 
             self.log_info(client_ip)
-            self.loging()
+            self.logging()
         if client_ip in self.banned_ip: return
         if path == '/quit' and client_ip in self.communicating_ip:
             try:
@@ -273,7 +273,9 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         client_ip, client_port = self.client_address
-        self.log_info(client_ip)
+        with LOCK: 
+            self.log_info(client_ip)
+            self.logging()
         if client_ip not in self.banned_ip:
             super().do_GET()
 

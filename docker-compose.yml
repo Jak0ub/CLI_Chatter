@@ -14,6 +14,6 @@ services:
     ports:
       - "8080:9001" # Change 8080 to your public port
     volumes:
-          - /tmp/report_from_docker.txt:/app/report.txt #Save the report from docker to local file.
+          - /opt/chatter/report_from_docker.txt:/app/report.txt #Save the report from docker to local file.
     stdin_open: true
     tty: true

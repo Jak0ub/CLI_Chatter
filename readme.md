@@ -70,12 +70,20 @@ python client.py
 
 
 ### Download the docker
+
+*Switch to root user*
 ```
-cd /tmp
+sudo su
+```
+
+*Prepare working dir*
+```
+mkdir /opt/chatter
+cd /opt/chatter
 git clone https://github.com/Jak0ub/Cli_Chatter
-cd Cli_Chatter
 touch report_from_docker.txt
 chmod 666 report_from_docker.txt
+cd Cli_Chatter
 ```
 ### **EDIT THE `docker-compose.yml` PASSWORD, PORT and PACKET_LIMIT**
 
