@@ -110,7 +110,7 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
 
     def loging(self):
         if (time.time() - self.start_time) > self.time_between_reports:
-            self.start_time = time.time
+            self.start_time = time.time()
             others.write_report(self.Addresses, self.banned_ip)
 
     def do_POST(self):
