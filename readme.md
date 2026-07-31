@@ -14,6 +14,9 @@
     * You're met with "y/n" asking whether to allow specific ip to join in. Rejecting leaves you in the room. If you do accept, you send your response to the server and are met with another password, this time it is the room password.
     * The room password should be known only by those, who are using the same room. Using this password, you encrypt your another key so even the server cant tamper with your messages. You send the key and the server then acts as relay server. The other side tries to decrypt the public key by the specific password. If the pub key was decrypted successfully, that means you've created E2EE even the server cant tamper with.
     * **Client code is equipped with MITM detection to warn you, if someting was tampered with.**
+
+> ℹ️ **Info:**
+>  **By default, the project is set to http protocol meaning there is metadata leakage possibility. For those super paranoid: You can solve this by using Caddy. After solving that, all your clients will need to edit `protocol variable` in client.py.**
 ### General info
 * Code is separated into multiple files for better modularity.
 * Leaving the room in process just leaves the logs on the server side RAM. Rejoining was accounted for. 

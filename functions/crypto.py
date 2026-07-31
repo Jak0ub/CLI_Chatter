@@ -82,7 +82,7 @@ def send_key(url,public_key,access_code):
     return x
 
 def get_room_info(server,private_key):
-    r = rq.post(f"http://{server}/rooms", data="")
+    r = rq.post(f"{server}/rooms", data="")
     room_details_decoded = base64_decode(r.text)
     room_details_decrypted = decrypt(private_key, room_details_decoded)
     rooms = room_details_decrypted.decode()

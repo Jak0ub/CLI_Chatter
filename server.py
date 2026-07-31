@@ -8,7 +8,7 @@ LOCK = threading.Lock()
 message_queue = queue.Queue()
 
 class ThreadedHandler(SimpleHTTPRequestHandler):
-    #Creating needed files
+    #Creating needed files outside of current dir to avoid any files leakage
     os.system("mkdir hosting")
     os.chdir("hosting")
     rooms_value, access_code, ddos_protection = others.get_env()
@@ -59,7 +59,8 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
             self.send_header('Content-Type', 'text/plain')
             self.end_headers()
             with LOCK: #Remove details about client
-                self.remove_logs(client_id)
+                if client_id in self.access_granted: #Not yet deleted
+                    self.remove_logs(client_id)
             self.wfile.write(b"TIMEOUT")
 
     def respond(self, code, msg,handler):
@@ -95,15 +96,16 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
                     (self.ip_to_key).update({client_ip: False}) #No key for this IP yet
                     self.respond(200, "AUTH OK",False)
 
-    def remove_logs(self, client_ip):
+    def remove_logs(self, client_ip): #Remove all logs and queues
         #Get needed info about both sides
-        if client_ip in self.communicating_ip:
+        try:
             room_quit = self.ip_to_room[client_ip]
-        else: room_quit = self.ip_to_room[client_ip]
+        except KeyError:
+            room_quit = 0
         #Delete all logs about clients
-        self.communicating_ip, self.ip_to_room, self.ip_to_key, self.keys, self.rooms, self.Addresses, self.access_granted, self.waiting_for_start, self.waiting_for_room, self.waiting_for_key, self.approved = others.clean_room(
-            room_quit, client_ip, client_ip, self.communicating_ip, self.ip_to_room, self.ip_to_key, self.keys, self.rooms, self.Addresses,
-            self.access_granted, self.waiting_for_start, self.waiting_for_room, self.waiting_for_key, self.approved
+        self.communicating_ip, self.ip_to_room, self.ip_to_key, self.keys, self.rooms, self.Addresses, self.access_granted, self.waiting_for_start, self.waiting_for_room, self.waiting_for_key, self.approved, self.client_queues = others.delete_logs(
+            room_quit, client_ip, self.communicating_ip, self.ip_to_room, self.ip_to_key, self.keys, self.rooms, self.Addresses,
+            self.access_granted, self.waiting_for_start, self.waiting_for_room, self.waiting_for_key, self.approved, self.client_queues
         )
 
     def loging(self):
@@ -173,12 +175,15 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
                     other_side = next(k for k, v in (self.ip_to_room).items() if v == room_num and k != client_ip)
                     if int(data_temp.split("\n")[0]) == self.ip_to_room[client_ip]: #Long poll the request, because this was message recieving request
                         self._handle_wait(client_ip)
-                except:
-                    room_num = self.ip_to_room[client_ip]
-                    other_side = next(k for k, v in (self.ip_to_room).items() if v == room_num and k != client_ip)
-                    if other_side not in self.waiting_for_key and client_ip not in self.waiting_for_key: #Chat is legit
-                        self._notify(other_side, data, 0)
-                        self.respond(200,"OK",False)
+                except Exception as e:
+                    if e is not queue.Empty:
+                        try:
+                            room_num = self.ip_to_room[client_ip]
+                            other_side = next(k for k, v in (self.ip_to_room).items() if v == room_num and k != client_ip)
+                        except: other_side = "" #Other side has already quit.
+                        if other_side not in self.waiting_for_key and client_ip not in self.waiting_for_key and other_side != "": #Chat is legit
+                            self._notify(other_side, data, 0)
+                            self.respond(200,"OK",False)
                     
             try: #Enable relogin after not fully closed session
                 data_temp = data
@@ -202,7 +207,7 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
                         if self.rooms[room_num-1] == 0 and self.ip_to_room[client_ip] != room_num: #If the room is not full and current ip is not in this room
                             with LOCK:
                                 if self.ip_to_room[client_ip] != 0: #Leave the previous room
-                                    self.rooms[self.ip_to_room[client_ip]-1] -= 1
+                                    self.rooms[self.ip_to_room[client_ip]-1] = 0
                                 self.rooms[room_num-1] += 1
                                 self.ip_to_room[client_ip] = room_num
                                 #Join new room
@@ -212,7 +217,7 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
                         elif self.rooms[room_num-1] == 1 and self.ip_to_room[client_ip] != room_num and data_line_1 != "start": #Ask the other side for approval to join
                             with LOCK:
                                 if self.ip_to_room[client_ip] != 0: #Leave the previous room
-                                    self.rooms[self.ip_to_room[client_ip]-1] -= 1
+                                    self.rooms[self.ip_to_room[client_ip]-1] = 0
                                     self.ip_to_room[client_ip] = 0
                                 other_side = next(k for k, v in (self.ip_to_room).items() if v == room_num)
                                 pub_key_client = self.keys[other_side]

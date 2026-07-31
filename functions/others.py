@@ -24,17 +24,15 @@ def get_safe_input(text): #Get safe input from user (input w/o output)
     paswd = getpass.getpass(text)
     return paswd
         
-def clean_room(room_num, ip1, ip2, communicating_ip, ip_to_room, ip_to_key, keys, rooms, Addresses, access_granted, waiting_for_start, waiting_for_room, waiting_for_key, approved): #Remove all logs about clients
+def delete_logs(room_num, ip1, communicating_ip, ip_to_room, ip_to_key, keys, rooms, Addresses, access_granted, waiting_for_start, waiting_for_room, waiting_for_key, approved,client_queues): #Remove all logs about clients
     #Delete all logs in RAM
-    for remove_ip in [ip1, ip2]:
-        if remove_ip in Addresses: Addresses.pop(remove_ip)
-        for var in [communicating_ip, ip_to_room, ip_to_key, access_granted, waiting_for_start, waiting_for_room, waiting_for_key,approved,keys]:
-            if remove_ip in var:
-                if type(var) == list:   var.pop(var.index(remove_ip))
-                elif type(var) == dict: var.pop(remove_ip)
-        if remove_ip == ip2: break #Possible for removing details only for one ip in a room
+    if ip1 in Addresses: Addresses.pop(ip1)
+    for var in [communicating_ip, ip_to_room, ip_to_key, access_granted, waiting_for_start, waiting_for_room, waiting_for_key,approved,keys,client_queues]:
+        while ip1 in var:
+            if type(var) == list:   var.pop(var.index(ip1))
+            elif type(var) == dict: var.pop(ip1)
     if room_num > 0: rooms[room_num-1] = 0
-    return communicating_ip, ip_to_room, ip_to_key, keys, rooms, Addresses, access_granted, waiting_for_start, waiting_for_room, waiting_for_key, approved
+    return communicating_ip, ip_to_room, ip_to_key, keys, rooms, Addresses, access_granted, waiting_for_start, waiting_for_room, waiting_for_key, approved, client_queues
 
 def quit_all():
     os._exit(0)
