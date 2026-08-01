@@ -1,5 +1,16 @@
 # CLI_Chatter (Docker and DDoS solution provided)
-### How does it work?
+
+## Try it out
+
+> ℹ️ **Info:**
+>  **If you want to test this project before deploying this yourself, contact me on [X](https://x.com/usr_jak0ub). I can't share details of the server because of AI and bots so they dont waste my VPS bandwidth.**
+
+>  **Even if you dont trust the server, trusting the client code is the only thing you need [thanks to the way this project is designed.](#how-does-it-work) My server is protected by Cloudflare and fail2ban. It uses https to not leak metadata, [here's how.](#caddy-setup)**
+
+> ⚠️ **Warning:**
+>  You may need to disable IPv6.
+
+## How does it work?
 
 * Server runs as **Simple HTTP Server(shown in images below)**, so no network scan can suggest real intent (Chatting app). Some network analysers may flag this as C2 cause of the E2EE. Only the encrypted server public key is publicly available, so the server doesn't look that blank.
 * MITM protection works as following:
@@ -16,8 +27,9 @@
     * **Client code is equipped with MITM detection to warn you, if someting was tampered with.**
 
 > ℹ️ **Info:**
->  **By default, the project is set to http protocol meaning there is metadata leakage possibility. For those super paranoid: You can solve this by using Caddy. After solving that, all your clients will need to edit `protocol variable` in client.py.**
-### General info
+>  **By default, the project is set to http protocol meaning there is metadata leakage possibility. For those super paranoid: You can solve this by using [Caddy](#caddy-setup).**
+
+## General info
 * Code is separated into multiple files for better modularity.
 * Leaving the room in process just leaves the logs on the server side RAM. Rejoining was accounted for. 
 * [fail2ban](#ddos-protection-setup) and [docker](#docker-installation) integration is available.
@@ -47,7 +59,7 @@
 * Server is only for UNIX, client is for all platforms.
 * Clients are represented by IP addr. Avoid 2 clients from the same IP at the same time.
 * If some IP addr. exceeds the **ddos_protection** var limit, than the program stores the IP addr. into `report.txt` permanently to your dir. **Should be used with fail2ban.**
-* Change **port** var to any port you'd like to avoid bots.
+* Change **port** var to any port you'd like to avoid bots. If you plan to use Caddy, you'll need to change the Caddyfile port to your own.
 * You can also change after how many packets the logs will be erased and `report.txt` saved. **(Not for docker)**
 * **READ THE FOLLOWING WARNING!**
 
@@ -55,13 +67,15 @@
 > ⚠️ **Warning:**
 >  After using `/quit` your terminal might stop working as intended. If you encounter this type of error, use `reset` command (for Unix)
 
-# Installation
+# Client installation
 
 ```
 git clone https://github.com/Jak0ub/Cli_Chatter
 cd Cli_Chatter
+python3 -m venv venv
+source venv/bin/activate
 pip install -r req.txt
-python client.py
+python3 client.py
 ```
 
 # Docker installation
@@ -85,7 +99,7 @@ touch report_from_docker.txt
 chmod 666 report_from_docker.txt
 cd Cli_Chatter
 ```
-### **EDIT THE `docker-compose.yml` PASSWORD, PORT and PACKET_LIMIT**
+### **EDIT THE `docker-compose.yml` PASSWORD and PACKET_LIMIT**
 
 ### Start the docker
 ```
@@ -138,3 +152,43 @@ action = iptables-multiport[name=CliChatter, chain=DOCKER-USER, port="1:65535", 
 sudo systemctl start fail2ban 
 sudo systemctl enable fail2ban
 ```
+
+# Caddy setup
+
+* First I registered domain at Cloudflare.
+    * WHY? Because CloudFlare solves the `CF-Connecting-IP` header for me. I can fully rely on the integrity of this header. If someone does tamper with the hearer, Cloudflare drops the request. I do strongly recommend chosing Cloudflare, but do your own research.
+* Then I bought VPS for separated computer from my home network, because my server is available to everyone reading this repo.
+* I installed the docker, edited the `docker-compose.yml` and then I edited the `server.py` file. **DONT JUST COPY PASTE, READ IT THROUGH**:
+```
+    #I defined this function in the class, because of how Caddy relays the requests
+    def address_string(self):
+        cf_ip = self.headers.get('CF-Connecting-IP') #CloudFlare ONLY
+        if cf_ip:
+            return cf_ip.strip()
+        forwarded = self.headers.get('X-Forwarded-For') #Backup, dont rely on this
+        if forwarded:
+            return forwarded.split(',')[0].strip()
+        return super().address_string()
+    #And I changed these two lines in _GET and _POST:
+    client_ip, client_port = self.client_address
+    #To this:
+    client_ip = self.address_string()
+```
+* I then created certificates to ensure https. I went to Cloudflare **SSL/TLS > Origin Server** and created certificates.
+* After transfering the certificates and ensuring correct permissions to `/etc/caddy/cf-origin/` as `cert.pem` and `key.pem`, I edited the `/etc/caddy/Caddyfile` as following:
+```
+subdomain.domain.tld {
+        tls /etc/caddy/cf-origin/cert.pem /etc/caddy/cf-origin/key.pem
+        reverse_proxy localhost:9001
+}
+```
+* Now i restarted caddy and booted up the docker container.
+```
+systemctl restart caddy
+systemctl enable caddy
+docker compose build --no-cache && docker compose up -d
+```
+* Last step was integrating the fail2ban solution, and that's about it!
+
+> ⚠️ **Warning:**
+>  Clients may need to disable IPv6.

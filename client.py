@@ -60,9 +60,7 @@ def check_timeout(x):
 def main():
     key_room_sent = False
     clear_cmd = others.os_def()
-    protocol = "http://" #Change if server is https
-    server = input("Enter the server ip with port(default port 80): ")
-    server = f"{protocol}{server}"
+    server = input("Enter the server ip/domain w or w/o a port(ex. https://server.com): ")
     access_code = others.get_safe_input("Enter the server access code: ")
 
     r = rq.get(f"{server}/key.pub")
