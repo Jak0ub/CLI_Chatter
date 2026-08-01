@@ -126,7 +126,7 @@ sudo vi /etc/fail2ban/jail.d/cli_chatter.local
 [cli_chatter]
 enabled = true
 filter  = cli_chatter
-logpath = /tmp/report_from_docker.txt
+logpath = /opt/chatter/report_from_docker.txt
 backend = polling
 maxretry= 1
 findtime= 1
