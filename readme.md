@@ -26,6 +26,15 @@
     * The room password should be known only by those, who are using the same room. Using this password, you encrypt your another key so even the server cant tamper with your messages. You send the key and the server then acts as relay server. The other side tries to decrypt the public key by the specific password. If the pub key was decrypted successfully, that means you've created E2EE even the server cant tamper with.
     * **Client code is equipped with MITM detection to warn you, if someting was tampered with.**
 
+## Message encryption format
+
+* Every payload is encrypted like this:
+    * A random, one-time Fernet (AES) key is generated.
+    * The actual message is encrypted with that key. Fernet has no meaningful length limit.
+    * The Fernet key itself is encrypted with the recipient's RSA public key.
+    * Both the key and the message are combined into one payload and sent together
+
+
 > ℹ️ **Info:**
 >  **By default, the project is set to http protocol meaning there is metadata leakage possibility. For those super paranoid: You can solve this by using [Caddy](#caddy-setup).**
 
@@ -157,7 +166,7 @@ sudo systemctl enable fail2ban
 
 * First I registered domain at Cloudflare.
     * WHY? Because CloudFlare solves the `CF-Connecting-IP` header for me. I can fully rely on the integrity of this header. If someone does tamper with the hearer, Cloudflare drops the request. I do strongly recommend chosing Cloudflare, but do your own research.
-* Then I bought VPS for separated computer from my home network, because my server is available to everyone reading this repo.
+* Then I bought a VPS.
 * I installed the docker, edited the `docker-compose.yml` and then I edited the `server.py` file. **DONT JUST COPY PASTE, READ IT THROUGH**:
 ```
     #I defined this function in the class, because of how Caddy relays the requests

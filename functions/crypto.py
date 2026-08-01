@@ -53,14 +53,19 @@ def save_pub_key(public_key, name, access_code): #Save pub key to file (for serv
 def key_to_bytes(public_key): #Return readable string of pub key
     return public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
 
-def encrypt(public_key, msg): #Encrypt msg using public key
+def encrypt(public_key, msg): #Encrypt msg using public key (hybrid RSA+Fernet, no length limit)
     if type(msg) != bytes: msg = msg.encode("utf-8")
-    encrypted = public_key.encrypt(msg, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
-    return encrypted
+    session_key = Fernet.generate_key() #One-time key
+    ciphertext = Fernet(session_key).encrypt(msg)
+    encrypted_key = public_key.encrypt(session_key, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
+    return encrypted_key + ciphertext
 
-def decrypt(private_key, msg): #Decrypt msg using priv key
-    decrypted = private_key.decrypt(msg,padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
-    return decrypted
+def decrypt(private_key, msg): #Decrypt msg using priv key (hybrid RSA+Fernet)
+    key_len = private_key.key_size // 8
+    encrypted_key = msg[:key_len]
+    ciphertext = msg[key_len:]
+    session_key = private_key.decrypt(encrypted_key, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
+    return Fernet(session_key).decrypt(ciphertext)
 
 def hash_text(text=str): #Convert text to sha256 hash alg type
     return sha256(text.encode("utf-8")).hexdigest()

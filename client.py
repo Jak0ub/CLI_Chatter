@@ -94,7 +94,9 @@ def main():
             x = send_data(server, server_key, [f"room: {room}"])
             check_timeout(x)
             x_temp = crypto.base64_decode(x.text)
-            other_side_response = crypto.decrypt(private_key, x_temp)
+            try:
+                other_side_response = crypto.decrypt(private_key, x_temp)
+            except: mitm_possible(room, server, server_key)
             other_side_response = other_side_response.decode()
             if other_side_response.split(",")[0] == "y":
                 other_side_ip = other_side_response.split(",")[1]
@@ -112,14 +114,18 @@ def main():
             while other_side_response != "start":
                 if key_room_sent == True: break
                 x = crypto.base64_decode(x.text)
-                other_side_ip = crypto.decrypt(private_key, x)
+                try:
+                    other_side_ip = crypto.decrypt(private_key, x)
+                except: mitm_possible(room, server, server_key)
                 other_side_ip = other_side_ip.decode()
                 request = input(f"{other_side_ip} is trying to join. Let them in? y/n: ")
                 if request.lower() == "y":
                     x = send_data(server, server_key, [f"room: {room}", f"{other_side_ip}: y"])
                     check_timeout(x)
                     x_temp = crypto.base64_decode(x.text)
-                    other_side_response = crypto.decrypt(private_key, x_temp)
+                    try:
+                        other_side_response = crypto.decrypt(private_key, x_temp)
+                    except: mitm_possible(room, server, server_key)
                     other_side_response = other_side_response.decode()
                     if other_side_response == "start":
                         others.clear(clear_cmd)
