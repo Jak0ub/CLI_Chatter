@@ -70,7 +70,6 @@
 * Clients are represented by IP addr. Avoid 2 clients from the same IP at the same time.
 * If some IP addr. exceeds the **ddos_protection** var limit, than the program stores the IP addr. into `report.txt` permanently to your dir. **Should be used with fail2ban.**
 * Change **port** var to any port you'd like to avoid bots. If you plan to use Caddy, you'll need to change the Caddyfile port to your own.
-* You can also change after how many packets the logs will be erased and `report.txt` saved. **(Not for docker)**
 * **READ THE FOLLOWING WARNING!**
 
 
