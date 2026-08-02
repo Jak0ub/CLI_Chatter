@@ -16,7 +16,8 @@
 * MITM protection works as following:
     * First you get the server public key which is **encrypted using Fernet with the server access_code** so no third-party could tamper with your future communication. If someone does tamper with data being sent, server will detect it and wont respond.
     * After obtaining the server public key, you prove your integrity by decrypting the server public key by access_code entered on the client-side. You than use the public_key to encrypt the authorization process.
-    * The auth works by you **hashing "{access_code}{client_ip}"** and than encrypting this to the server. Meaning **this process is C2S**.
+    * The auth works by you **hashing "{access_code}{client_ip}"**. Then you create time.time() unix timestamp on the second line. All this body is encrypted by server_key. Meaning **this process is C2S**.
+    * Server validates the time window, by default 5s, using its own time.time() timestamp. Thanks to chosing unix timestamp, we don't have to consider time zones.
     * After the server responds with "AUTH OK", you send the server your client_public_key which is also encrypted using access_code with Fernet. This also ensures MITM protection.
     * After sending the public_key, you load room details using /rooms endpoint. Server does not store room details in accessible files, but loads the details and responds with encrypted response which you than decrypt.
     * You than select room number. Also C2S. Server responds after checking some details itself, not relying on client-side.
