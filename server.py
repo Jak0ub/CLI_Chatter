@@ -87,14 +87,18 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
             #If the access_code+OriginIP hashed match the parameter given. The IP has access granted. Just prevention system
             access_code_for_this_ip = f"{self.access_code}{client_ip}"
             hashed_access_code_for_this_ip = crypto.hash_text(access_code_for_this_ip)
-            if data.split("\n")[0].split(": ")[0] == "auth":
-                if data.split("\n")[0].split(": ")[1] == hashed_access_code_for_this_ip:
-                    if client_ip in self.ip_to_room:
-                        self.remove_logs(client_ip) #Restart variables for this IP.
-                    (self.access_granted).append(client_ip)
-                    (self.ip_to_room).update({client_ip: 0}) #Default room 0
-                    (self.ip_to_key).update({client_ip: False}) #No key for this IP yet
-                    self.respond(200, "AUTH OK",False)
+            user_time = data.split("\n")[1]
+            if time.time() - float(user_time) > 5: #Max 5s. Time is set as unix timestamp, so timezones aren't a problem.
+                self.respond(200, "X",False)
+            else:
+                if data.split("\n")[0].split(": ")[0] == "auth":
+                    if data.split("\n")[0].split(": ")[1] == hashed_access_code_for_this_ip:
+                        if client_ip in self.ip_to_room:
+                            self.remove_logs(client_ip) #Restart variables for this IP.
+                        (self.access_granted).append(client_ip)
+                        (self.ip_to_room).update({client_ip: 0}) #Default room 0
+                        (self.ip_to_key).update({client_ip: False}) #No key for this IP yet
+                        self.respond(200, "AUTH OK",False)
 
     def remove_logs(self, client_ip): #Remove all logs and queues
         #Get needed info about both sides

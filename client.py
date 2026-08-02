@@ -2,7 +2,7 @@ import requests as rq
 from functions import crypto, others
 import re as r #RegEx lib
 from urllib.request import urlopen
-import threading
+import threading, time
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 
@@ -69,7 +69,7 @@ def main():
 
     access_code_secure = f"{access_code}{get_public_ip()}"
     hashed_access_code = crypto.hash_text(access_code_secure)
-    lines = [f"auth: {hashed_access_code}"]
+    lines = [f"auth: {hashed_access_code}", f"{time.time()}"]
     x = send_data(server, server_key, lines)
     if (x.text).split("\n")[0] == "AUTH OK": 
         access = True
