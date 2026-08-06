@@ -5,48 +5,58 @@
 > ℹ️ **Info:**
 >  **If you want to test this project before deploying this yourself, contact me on [X](https://x.com/usr_jak0ub). I can't share details of the server because of AI and bots so they dont waste my VPS bandwidth.**
 
->  **Even if you dont trust the server, trusting the client code is the only thing you need [thanks to the way this project is designed.](#how-does-it-work) My server is protected by Cloudflare and fail2ban. It uses https to not leak metadata, [here's how.](#caddy-setup)**
+>  **Even if you dont trust the server, trusting the client code is the only thing you need [thanks to the way this project is designed.](#how-does-it-work)**
 
 > ⚠️ **Warning:**
->  You may need to disable IPv6.
+>  **Share access_code only with people you trust. Someone skilled could use the access_code for MITM!**
 
 ## How does it work?
 
 * Server runs as **Simple HTTP Server(shown in images below)**, so no network scan can suggest real intent (Chatting app). Some network analysers may flag this as C2 cause of the E2EE. Only the encrypted server public key is publicly available, so the server doesn't look that blank.
-* MITM protection works as following:
+
+* Every packet has following body **(Encrypted by the server public key, which you obtained safely)**:
+    1) `Unix timestamp` (To make the packet expire after 5s, so replay attacks wont work)
+    2) `Client nickname_ID` (not shared anywhere, unique, 16char long with letters (upper/lower) and numbers included)
+    3) `Client action`
+    4) `Client blob` (Here the client sends the payloads)
+
+* **How does the networking function?**
     * First you get the server public key which is **encrypted using Fernet with the server access_code** so no third-party could tamper with your future communication. If someone does tamper with data being sent, server will detect it and wont respond.
-    * After obtaining the server public key, you prove your integrity by decrypting the server public key by access_code entered on the client-side. You than use the public_key to encrypt the authorization process.
-    * The auth works by you **hashing "{access_code}{client_ip}"**. Then you create time.time() unix timestamp on the second line. All this body is encrypted by server_key. Meaning **this process is C2S**.
-    * Server validates the time window, by default 5s, using its own time.time() timestamp. Thanks to chosing unix timestamp, we don't have to consider time zones.
-    * After the server responds with "AUTH OK", you send the server your client_public_key which is also encrypted using access_code with Fernet. This also ensures MITM protection.
-    * After sending the public_key, you load room details using /rooms endpoint. Server does not store room details in accessible files, but loads the details and responds with encrypted response which you than decrypt.
-    * You than select room number. Also C2S. Server responds after checking some details itself, not relying on client-side.
-    * Now you're waiting in chat room. **The server is set by default to hold your request for 60s (long poll)**. If noone requests to join in to your room, you leave the room and the all logs are cleared. This ensures room rotation. Every request is long polled by default for 60s. **If the time exceeds, client data is deleted and client program is terminated.**
-    * If someone does request to join in, they send encrypted request to the server which then decrypts it and executes it if it does meet certain criteria. Execution means sending you an encrypted response to your long poll (meaning real time responses) using your public key.
-    * You're met with "y/n" asking whether to allow specific ip to join in. Rejecting leaves you in the room. If you do accept, you send your response to the server and are met with another password, this time it is the room password.
-    * The room password should be known only by those, who are using the same room. Using this password, you encrypt your another key so even the server cant tamper with your messages. You send the key and the server then acts as relay server. The other side tries to decrypt the public key by the specific password. If the pub key was decrypted successfully, that means you've created E2EE even the server cant tamper with.
-    * **Client code is equipped with MITM detection to warn you, if someting was tampered with.**
+    * After obtaining the server public key, you prove your integrity by decrypting the server public key by access_code entered on the client-side. You than use the public_key to encrypt every other request.
+    * The auth works by sending packet with `client action set to auth: {access_code}`. The `client_blob is set to your client public key`, which is also **encrypted using Fernet with the server access_code.** Only with this packet, you use plaintext nickname, which the client wants to register. The server does checks whether the nickname is free or not.
+    * After the server responds with client_generated_random_nickname_ID, the client loads room with `action: room_info`. **The unique 16 characters and numbers long nickname_ID is used to prevent session hijacks.**
+    * Client than either creates a new room using `action: room_create` or joins a room using `action: room_join`. For both, you specify the room_specific password. The password is never sent to the server, that is why you can use this app even if you dont trust the server.
+    * `Room_create` is pretty straightforward, you get the server response which tells you if the room with your specified name was created successfully. You're now the **room_leader, which will respond to new client, with the correct room_password, joining in.**
+    * `Room_join` works by `sending the room_leader your client_blob which now contains your new public_key encrypted with Fernet using the room_password.` If room_leader decrypts the key, that means you have the same password and the room_leader sends you room specific pub and private key encrypted using your just sent public key. Otherwise, the room_leader sends the server notification about the wrong password. The server then notifies the guesser. Every nickname has only 3 guesses at all. If they join some room, the value resets, creating doesnt count. **After 3 wrong guesses the nickname is blacklisted and logs will NOT be deleted.**
+    * If everyting went as it should, the client joins in and chatting can begin.
+    * **If the room_leader quits the room, but the room is not empty, the room_leader role is passed down onto another client in the room.**
+    * If the nickname went offline for a TTL_nickname var amount of seconds and hasn't used `client_action: QUIT`, then the nickname is marked as free and all logs about it  will be deleted after someone else reqeusts the certain nickname.
+    * **Code is equipped with MITM detection to warn you, if someting was tampered with.**
 
-## Message encryption format
 
-* Every payload is encrypted like this:
-    * A random, one-time Fernet (AES) key is generated.
-    * The actual message is encrypted with that key. Fernet has no meaningful length limit.
-    * The Fernet key itself is encrypted with the recipient's RSA public key.
-    * Both the key and the message are combined into one payload and sent together
+> ⚠️ **Warning:**
+>  **If client sees: 'Server-side error or possible MITM!', that means the client/server code or the payload was tampered with by third party.**
+
+
+### Room commands:
+```
+/quit to leave the room and remove all logs about your nickname.
+/details to get info about how many clients are connected in the room.
+```
+
+
+## General info
+* Clients are represented by chosen nickname.
+* Code is separated into multiple files for better modularity.
+* [fail2ban](#ddos-protection-setup) and [docker](#docker-installation) integration is available.
+* **Once you authorize your ip, anyone can send as many requests as they'd like from your public ip. They cant cause any real damage, not even DDOS considering the bandwidth of the ONE IP rehind ONE ROUTER.**
 
 
 > ℹ️ **Info:**
 >  **By default, the project is set to http protocol meaning there is metadata leakage possibility. For those super paranoid: You can solve this by using [Caddy](#caddy-setup).**
 
-## General info
-* Code is separated into multiple files for better modularity.
-* Leaving the room in process just leaves the logs on the server side RAM. Rejoining was accounted for. 
-* [fail2ban](#ddos-protection-setup) and [docker](#docker-installation) integration is available.
-* Once you authorize your ip, anyone can send as many requests as they'd like from your public ip. The server is E2EE so they wont do any real damage, just maybe cause DDOS.
-
 > ⚠️ **Warning:**
->  **Make sure to rotate server access_code, which is used to C2S. Ensure length of this access_code to be enough to prevent offline brute forcing (Not a big deal for real time MITM, but if you use the same access_code over and over again, it may cause undetectable MITM for future communications). Every room ensures E2EE by creating yet another password which should be known only by those using that room (Stronly recommended changing the password for every room instance). .**
+>  **Make sure to rotate server access_code, which is used to C2S. Ensure length of this access_code to be enough to prevent offline brute forcing (Not a big deal for real time MITM, but if you use the same access_code over and over again, it may cause undetectable MITM for future communications). Every room ensures E2EE by creating yet another password which should be known only by those using that room (Stronly recommended using long password).**
 
 
 
@@ -60,17 +70,22 @@
 > ℹ️ **Info:**
 >  **Please ignore the IP addresses in the GIF below. It shows the program in a lab testing environment.**
 
+## Demo
 
-![gif](https://github.com/Jak0ub/Jak0ub/blob/main/cli_chatter.gif)
+### Chatting
+
+![gif](https://github.com/Jak0ub/Jak0ub/blob/main/cli_chatter_1.gif)
+
+### Rate limiting in action
+
+![gif](https://github.com/Jak0ub/Jak0ub/blob/main/cli_chatter_2.gif)
 
 
 ## Important Notes
 
 * Server is only for UNIX, client is for all platforms.
-* Clients are represented by IP addr. Avoid 2 clients from the same IP at the same time.
-* If some IP addr. exceeds the **ddos_protection** var limit, than the program stores the IP addr. into `report.txt` permanently to your dir. **Should be used with fail2ban.**
+* If some IP addr. exceeds the **ddos_protection** var limit, then the program stores the IP addr. into `report.txt` permanently to your dir. **Should be used with fail2ban.**
 * Change **port** var to any port you'd like to avoid bots. If you plan to use Caddy, you'll need to change the Caddyfile port to your own.
-* **READ THE FOLLOWING WARNING!**
 
 
 > ⚠️ **Warning:**
@@ -162,7 +177,7 @@ sudo systemctl start fail2ban
 sudo systemctl enable fail2ban
 ```
 
-# Caddy setup
+# Caddy setup (http to https for metadata leakage prevention)
 
 * First I registered domain at Cloudflare.
     * WHY? Because CloudFlare solves the `CF-Connecting-IP` header for me. I can fully rely on the integrity of this header. If someone does tamper with the hearer, Cloudflare drops the request. I do strongly recommend chosing Cloudflare, but do your own research.

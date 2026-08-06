@@ -10,7 +10,6 @@ services:
     network_mode: "host"
     environment:
       - server_access_code_=Password # Server password (CHANGE!)
-      - server_rooms_=3 # Number of rooms
       - server_packet_limit=10 #Packet limit until authorization(default 5 password attempts).
     volumes:
           - /opt/chatter/report_from_docker.txt:/app/report.txt #Save the report from docker to local file.
