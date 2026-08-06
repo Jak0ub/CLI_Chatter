@@ -1,8 +1,7 @@
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 from hashlib import sha256
-import base64, sys
-import requests as rq
+import base64
 from cryptography.fernet import Fernet
 
 def key_from_password(password: str) -> bytes: #Convert access code into hash able to be than used as a Fernet key
@@ -24,14 +23,20 @@ def base64_decode(text): #Decode text from base64 string/bytes
     b64_bytes = base64.b64decode(text.encode())
     return b64_bytes
 
-def retrieve_key(key, access_code):
+def retrieve_key(key, access_code, mode): #Mode 0 = pub key, else priv key
     key = decrypt_using_passwd(key, access_code)
     key = key.split("\n")
-    key.insert(0, "-----BEGIN PUBLIC KEY-----")
-    key.append("-----END PUBLIC KEY-----")
+    if mode == 0:
+        key.insert(0, "-----BEGIN PUBLIC KEY-----")
+        key.append("-----END PUBLIC KEY-----")
+    else:
+        key.insert(0, "-----BEGIN RSA PRIVATE KEY-----")
+        key.append("-----END RSA PRIVATE KEY-----")
     key = "\n".join(key)
     key = key.encode("ascii")
-    return load_pub_key(key)
+    if mode == 0:
+        return load_pub_key(key)
+    return load_priv_key(key)
 
 def generate_keys(): #Generate your own pub and priv keys
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -70,30 +75,22 @@ def decrypt(private_key, msg): #Decrypt msg using priv key (hybrid RSA+Fernet)
 def hash_text(text=str): #Convert text to sha256 hash alg type
     return sha256(text.encode("utf-8")).hexdigest()
 
-def load_pub_key(pub): #Load pub key from string for future encryption
+def load_pub_key(pub): #Load pub key
     return serialization.load_pem_public_key(pub)
 
-def send_key(url,public_key,access_code):
-    public_key_bytes = public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
-    public_key_str = public_key_bytes.decode("ascii")
-    public_key_lines = public_key_str.split("\n")
-    for i in range(3):
-        if i == 0: public_key_lines.pop(i)
-        else: public_key_lines.pop(-1)
-    key_str = "\n".join(public_key_lines)
-    data = encrypt_using_passwd(key_str, access_code)
-    x = rq.post(url, data=data) #Send key
-    if (x.text).split("\n")[0] == "X": print("Key sending failed..."); sys.exit()
-    return x
+def load_priv_key(priv): #Load priv key 
+    return serialization.load_pem_private_key(priv, password=None)
 
-def get_room_info(server,private_key):
-    r = rq.post(f"{server}/rooms", data="")
-    room_details_decoded = base64_decode(r.text)
-    room_details_decrypted = decrypt(private_key, room_details_decoded)
-    rooms = room_details_decrypted.decode()
-    rooms = rooms.split("\n")
-    #Show all rooms
-    count_of_rooms = 0
-    for room in rooms:
-        count_of_rooms += 1
-        print(f"{count_of_rooms}. room -> {room.split('-> ')[1].split('/')[0]}/2 online")
+def prepare_key(key,access_code, mode):
+    if mode == 0:
+        key_bytes = key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
+    else:
+        key_bytes = key.private_bytes(encoding=serialization.Encoding.PEM,format=serialization.PrivateFormat.TraditionalOpenSSL,encryption_algorithm=serialization.NoEncryption())
+    key_str = key_bytes.decode("ascii")
+    key_lines = key_str.split("\n")
+    for i in range(3):
+        if i == 0: key_lines.pop(i)
+        else: key_lines.pop(-1)
+    key_str = "\n".join(key_lines)
+    data = encrypt_using_passwd(key_str, access_code)
+    return data

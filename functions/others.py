@@ -5,6 +5,9 @@ import getpass
 def quit():
     sys.exit() #Quit program
 
+def quit_all():
+    os._exit(0)
+
 def os_def(): #Get cli clear cmd for specific system
     platform_system = platform.system()
     if platform_system == "Windows":
@@ -24,18 +27,30 @@ def get_safe_input(text): #Get safe input from user (input w/o output)
     paswd = getpass.getpass(text)
     return paswd
         
-def delete_logs(room_num, ip1, communicating_ip, ip_to_room, ip_to_key, keys, rooms, Addresses, access_granted, waiting_for_start, waiting_for_room, waiting_for_key, approved,client_queues): #Remove all logs about clients
-    #Delete all logs in RAM
-    if ip1 in Addresses: Addresses.pop(ip1)
-    for var in [communicating_ip, ip_to_room, ip_to_key, access_granted, waiting_for_start, waiting_for_room, waiting_for_key,approved,keys,client_queues]:
-        while ip1 in var:
-            if type(var) == list:   var.pop(var.index(ip1))
-            elif type(var) == dict: var.pop(ip1)
-    if room_num > 0: rooms[room_num-1] = 0
-    return communicating_ip, ip_to_room, ip_to_key, keys, rooms, Addresses, access_granted, waiting_for_start, waiting_for_room, waiting_for_key, approved, client_queues
+def delete_logs(room_name, client_ip, nickname, Addresses, ip_clients, client_queues, communicating_nickname, nickname_to_room, nickname_to_key, access_granted, rooms, rooms_waiting, nickname_to_id, room_leaders, nickname_room_attempts, last_time_online):
+    if ip_clients[client_ip] == 1: #Only client of this ip? Remove access
+        if client_ip in Addresses: Addresses.pop(client_ip)
+        if client_ip in access_granted: access_granted.pop(access_granted.index(client_ip))
+        ip_clients.pop(client_ip)
+    elif ip_clients[client_ip] > 1:
+        ip_clients[client_ip] -= 1
+    for var in [communicating_nickname, nickname_to_room, nickname_to_key,client_queues, rooms_waiting, nickname_to_id, nickname_room_attempts, last_time_online]:
+        while nickname in var:
+            if type(var) == list:   var.pop(var.index(nickname))
+            elif type(var) == dict: var.pop(nickname)
+    if room_name != 0: 
+        if rooms[room_name] > 1:
+            if room_name in room_leaders:
+                if room_leaders[room_name] == nickname: #Assign new room leader
+                    for k, v in (nickname_to_room).items():
+                        if v == room_name and k != nickname:
+                            room_leaders[room_name] =  k
+            rooms[room_name] -= 1
+        else:
+            room_leaders.pop(room_name)
+            rooms.pop(room_name)
 
-def quit_all():
-    os._exit(0)
+    return Addresses, ip_clients, client_queues, communicating_nickname, nickname_to_room, nickname_to_key, access_granted, rooms, rooms_waiting, nickname_to_id, room_leaders, nickname_room_attempts, last_time_online
 
 def write_report(Addr, banned_ip):
     if banned_ip != []:
@@ -47,11 +62,6 @@ def write_report(Addr, banned_ip):
 
 def get_env():#Only for docker
     #_ at the end just in case 
-    try: 
-        rooms_count = os.getenv("server_rooms_")
-        rooms_count = int(rooms_count)
-        if rooms_count > 100: rooms_count = None #More than 100 rooms for docker is overkill
-    except: rooms_count = None
     try: access_code = os.getenv("server_access_code_")
     except: access_code = None
     try: 
@@ -59,5 +69,5 @@ def get_env():#Only for docker
         ddos_protection = int(ddos_protection)
         if ddos_protection > 30: ddos_protection = 30 #More than 30 packet limit is not the best practice
     except: ddos_protection = 10 #Not using docker? Edit this number to customize the packet limit
-    return rooms_count, access_code, ddos_protection
+    return access_code, ddos_protection
 
