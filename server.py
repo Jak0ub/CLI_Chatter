@@ -29,6 +29,7 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
     nickname_room_attempts = {} #NICKNAME: ATT
     last_time_online = {} #nickname: TIMESTAMP
 
+    max_clients_for_ip = 9 #How much nicknames active can one IP have +1; Default val 9 = 10 max active clients
     time_between_reports = 60 #How much seconds does the program wait till it writes report
     start_time = time.time()
     TTL_value = 5 #5seconds by default to let the packet live
@@ -153,6 +154,7 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
         #Main code
         try: #Try decrypting the data
             wait = False
+            responded = False
             data_temp = data
             data_temp = crypto.decrypt(self.private_key, data_temp)
             data_temp = data_temp.decode()
@@ -171,16 +173,21 @@ class ThreadedHandler(SimpleHTTPRequestHandler):
                             if self.check_access(client_ip, client_action, client_id): #Access_code is right, which should be atp by just decrypting the key.
                                 #Stage 1
                                 client_key = crypto.load_pub_key(crypto.base64_decode(client_blob))
-                                (self.nickname_to_key).update({client_id: client_key})
-                                client_generated_id = self.generate_id(client_id)
-                                if client_ip in self.ip_clients: 
-                                    clients = self.ip_clients[client_ip] + 1
-                                else: 
-                                    clients = 1
-                                (self.ip_clients).update({client_ip: clients})
-                                (self.nickname_room_attempts).update({client_id: 0})
-                                (self.last_time_online).update({client_id: client_time}) #Log last time online
-                                self.respond(200, crypto.encrypt(client_key, f"{client_generated_id}"),False)
+                                if client_ip in self.ip_clients:
+                                    if self.ip_clients[client_ip] > self.max_clients_for_ip:
+                                        responded = True
+                                        self.respond(200, crypto.encrypt(client_key, "TMC"),False) #TMC = Too many clients
+                                if responded == False:
+                                    (self.nickname_to_key).update({client_id: client_key})
+                                    client_generated_id = self.generate_id(client_id)
+                                    if client_ip in self.ip_clients: 
+                                        clients = self.ip_clients[client_ip] + 1
+                                    else: 
+                                        clients = 1
+                                    (self.ip_clients).update({client_ip: clients})
+                                    (self.nickname_room_attempts).update({client_id: 0})
+                                    (self.last_time_online).update({client_id: client_time}) #Log last time online
+                                    self.respond(200, crypto.encrypt(client_key, f"{client_generated_id}"),False)
                         else:
                             if self.check_access(client_ip, client_action, client_id): #Access_code is right
                                 client_key = crypto.load_pub_key(crypto.base64_decode(client_blob))
