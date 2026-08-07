@@ -100,6 +100,9 @@ def main():
         if response == "TAKEN":
             others.clear(clear_cmd)
             nickname = input("Nickname is taken, enter another one: ")
+        elif response == "TMC":
+            input("Your IP has too many clients active atp, try again later\nEnter to continue")
+            others.quit()
         elif len(response) == 16: #Recieved the Private ID
             nickname_id = response
             access = True

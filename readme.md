@@ -47,6 +47,7 @@
 
 ## General info
 * Clients are represented by chosen nickname.
+* Each IP can have `max_clients_for_ip` + 1 active nicknames (Default 10 nicknames).
 * Code is separated into multiple files for better modularity.
 * [fail2ban](#ddos-protection-setup) and [docker](#docker-installation) integration is available.
 * **Once you authorize your ip, anyone can send as many requests as they'd like from your public ip. They cant cause any real damage, not even DDOS considering the bandwidth of the ONE IP rehind ONE ROUTER.**
